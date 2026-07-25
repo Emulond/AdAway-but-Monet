@@ -37,11 +37,11 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew assembleRelease --stacktrace
 
-      # - name: Upload APK
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: AdAway-dev
-      #     path: app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: AdAway-dev
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
       
       - name: Update dependency graph
         uses: mikepenz/gradle-dependency-submission@v1.0.0 # Deprecated: need to be changed
