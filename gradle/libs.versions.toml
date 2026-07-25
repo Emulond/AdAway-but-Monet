@@ -41,7 +41,7 @@ slf4j = "1.7.36"
 androidxCoreTesting = "2.2.0"
 androidxTest = "1.7.0"
 androidxTestJunit = "1.3.0"
-json = "20260522"
+json = "20260719"
 junit = "4.13.2"
 
 [libraries]
