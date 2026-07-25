@@ -49,7 +49,7 @@ interface HostsSourceDao {
     fun loadAll(): LiveData<List<HostsSource>>
 
     @Query("UPDATE hosts_sources SET last_modified_online = :dateTime WHERE id = :id")
-    fun updateOnlineModificationDate(id: Int, dateTime: ZonedDateTime)
+    fun updateOnlineModificationDate(id: Int, dateTime: ZonedDateTime?)
 
     @Query("UPDATE hosts_sources SET last_modified_local = :localModificationDate, last_modified_online = :onlineModificationDate WHERE id = :id")
     fun updateModificationDates(
