@@ -25,7 +25,7 @@ work = "2.11.2"
 guava = "33.6.0-android"
 material = "1.14.0"
 okhttp = "5.4.0"
-sentry = "8.43.1"
+sentry = "8.50.1"
 timber = "5.0.1"
 
 # Root
