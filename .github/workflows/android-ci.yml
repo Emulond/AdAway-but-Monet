@@ -40,7 +40,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v3
         with:
-          name: AdAway-dev
+          name: AdAway-development
           path: app/build/outputs/apk/release/app-release-unsigned.apk
       
       - name: Update dependency graph
