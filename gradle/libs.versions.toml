@@ -24,7 +24,7 @@ work = "2.11.2"
 # Common
 guava = "33.6.0-android"
 material = "1.14.0"
-okhttp = "5.3.2"
+okhttp = "5.4.0"
 sentry = "8.43.1"
 timber = "5.0.1"
 
