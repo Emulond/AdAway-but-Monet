@@ -302,11 +302,36 @@ public class SourceModel {
     }
 
     /**
+     * A listener notified before each enabled source is retrieved.
+     */
+    public interface SourceUpdateListener {
+        /**
+         * Called before a source is retrieved.
+         *
+         * @param completed The number of sources already retrieved.
+         * @param total     The total number of enabled sources to retrieve.
+         * @param label     The label of the source about to be retrieved.
+         */
+        void onSourceUpdateStarted(int completed, int total, String label);
+    }
+
+    /**
      * Retrieve all hosts sources files to copy into a private local file.
      *
      * @throws HostErrorException If the hosts sources could not be downloaded.
      */
     public void retrieveHostsSources() throws HostErrorException {
+        retrieveHostsSources((completed, total, label) -> {
+        });
+    }
+
+    /**
+     * Retrieve all hosts sources files to copy into a private local file.
+     *
+     * @param listener The listener notified of the retrieval progress.
+     * @throws HostErrorException If the hosts sources could not be downloaded.
+     */
+    public void retrieveHostsSources(SourceUpdateListener listener) throws HostErrorException {
         // Check connection status
         if (isDeviceOffline()) {
             throw new HostErrorException(NO_CONNECTION);
@@ -318,8 +343,17 @@ public class SourceModel {
         int numberOfFailedCopies = 0;
         // Compute current date in UTC timezone
         ZonedDateTime now = ZonedDateTime.now();
+        // Count the enabled sources to report progress against
+        List<HostsSource> allSources = this.hostsSourceDao.getAll();
+        int enabledSourceCount = 0;
+        for (HostsSource source : allSources) {
+            if (source.isEnabled()) {
+                enabledSourceCount++;
+            }
+        }
+        int completedSourceCount = 0;
         // Get each hosts source
-        for (HostsSource source : this.hostsSourceDao.getAll()) {
+        for (HostsSource source : allSources) {
             int sourceId = source.getId();
             // Clear disabled source
             if (!source.isEnabled()) {
@@ -327,6 +361,8 @@ public class SourceModel {
                 this.hostsSourceDao.clearProperties(sourceId);
                 continue;
             }
+            listener.onSourceUpdateStarted(completedSourceCount, enabledSourceCount, source.getLabel());
+            completedSourceCount++;
             // Get hosts source last update
             ZonedDateTime onlineModificationDate = getHostsSourceLastUpdate(source);
             if (onlineModificationDate == null) {

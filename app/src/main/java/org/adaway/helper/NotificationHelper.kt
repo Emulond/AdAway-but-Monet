@@ -107,6 +107,37 @@ object NotificationHelper {
         notificationManager.notify(UPDATE_HOSTS_PROGRESS_NOTIFICATION_ID, builder.build())
     }
 
+    /**
+     * Update the hosts progress notification with the source currently being retrieved.
+     *
+     * @param completed The number of sources already retrieved.
+     * @param total The total number of sources to retrieve.
+     * @param label The label of the source being retrieved.
+     */
+    @JvmStatic
+    fun showUpdateHostsProgressNotification(context: Context, completed: Int, total: Int, label: String) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
+        if (notificationManager == null || !notificationManager.areNotificationsEnabled()) {
+            return
+        }
+
+        val builder = buildUpdateProgressNotification(
+            context = context,
+            notificationManager = notificationManager,
+            title = context.getString(R.string.notification_update_host_progress_title),
+            text = context.getString(
+                R.string.notification_update_host_progress_source,
+                (completed + 1).coerceAtMost(total),
+                total,
+                label
+            ),
+            progress = if (total > 0) completed * 100 / total else null,
+            route = AdAwayRoute.HOSTS
+        )
+
+        notificationManager.notify(UPDATE_HOSTS_PROGRESS_NOTIFICATION_ID, builder.build())
+    }
+
     @JvmStatic
     fun clearUpdateHostsProgressNotification(context: Context) {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return

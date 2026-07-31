@@ -92,7 +92,14 @@ object SourceUpdateService {
             if (PreferenceHelper.getAutomaticUpdateDaily(application)) {
                 NotificationHelper.showUpdateHostsProgressNotification(application)
                 try {
-                    application.sourceModel.retrieveHostsSources()
+                    application.sourceModel.retrieveHostsSources { completed, total, label ->
+                        NotificationHelper.showUpdateHostsProgressNotification(
+                            application,
+                            completed,
+                            total,
+                            label
+                        )
+                    }
                     application.adBlockModel.apply()
                 } finally {
                     NotificationHelper.clearUpdateHostsProgressNotification(application)
