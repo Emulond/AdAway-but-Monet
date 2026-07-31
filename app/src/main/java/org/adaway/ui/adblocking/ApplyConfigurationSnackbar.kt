@@ -16,17 +16,19 @@ import org.adaway.AdAwayApplication
 import org.adaway.R
 import org.adaway.model.error.HostErrorException
 import org.adaway.util.ExpressiveSnackbar
+import org.adaway.util.SnackbarParent
 
 class ApplyConfigurationSnackbar(
     private val view: View,
     private val syncSources: Boolean,
     private val ignoreEventDuringInstall: Boolean
 ) {
+    private val snackbarParent: View = SnackbarParent.of(view)
     private val notifySnackbar: Snackbar = Snackbar
-        .make(view, R.string.notification_configuration_changed, LENGTH_INDEFINITE)
+        .make(snackbarParent, R.string.notification_configuration_changed, LENGTH_INDEFINITE)
         .setAction(R.string.notification_configuration_changed_action) { applyConfiguration() }
     private val waitSnackbar: Snackbar = Snackbar
-        .make(view, R.string.notification_configuration_installing, LENGTH_INDEFINITE)
+        .make(snackbarParent, R.string.notification_configuration_installing, LENGTH_INDEFINITE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var update = false
     private var skipUpdate = false
@@ -84,7 +86,8 @@ class ApplyConfigurationSnackbar(
     private fun endLoading(successfulInstall: Boolean) {
         waitSnackbar.dismiss()
         if (!successfulInstall) {
-            val failureSnackbar = Snackbar.make(view, R.string.notification_configuration_failed, LENGTH_LONG)
+            val failureSnackbar =
+                Snackbar.make(snackbarParent, R.string.notification_configuration_failed, LENGTH_LONG)
             ExpressiveSnackbar.style(failureSnackbar)
             val icon = ImageView(view.context).apply {
                 setImageResource(R.drawable.ic_error_outline_24dp)
