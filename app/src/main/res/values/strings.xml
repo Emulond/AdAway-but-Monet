@@ -259,4 +259,5 @@
     <string name="permission_send_command_label">Send commands to AdAway</string>
     <string name="permission_send_command_description">Allow to send commands to AdAway like enabling or disabling the system-wide ad-blocking</string>
 
+    <string name="tile_dns_recording_label">DNS recording</string>
 </resources>

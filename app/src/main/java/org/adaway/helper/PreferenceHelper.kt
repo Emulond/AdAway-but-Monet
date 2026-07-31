@@ -285,4 +285,23 @@ object PreferenceHelper {
     }
 
     private const val PREF_LAST_KNOWN_AD_BLOCKED = "lastKnownAdBlocked"
+
+    /**
+     * Get the last known DNS recording state, as displayed by the quick settings tile.
+     */
+    @JvmStatic
+    fun getLastKnownDnsRecording(context: Context): Boolean {
+        return context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_LAST_KNOWN_DNS_RECORDING, false)
+    }
+
+    @JvmStatic
+    fun setLastKnownDnsRecording(context: Context, value: Boolean) {
+        context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_LAST_KNOWN_DNS_RECORDING, value)
+            .apply()
+    }
+
+    private const val PREF_LAST_KNOWN_DNS_RECORDING = "lastKnownDnsRecording"
 }
