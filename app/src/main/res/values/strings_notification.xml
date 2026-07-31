@@ -11,6 +11,11 @@
     <string name="notification_update_host_progress_text">Downloading and applying source updates…</string>
     <string name="notification_update_host_progress_source">Source %1$d of %2$d: %3$s</string>
     <string name="notification_update_app_progress_title">Downloading AdAway update</string>
+    <!-- DNS recording notification -->
+    <string name="notification_dns_recording_channel_name">DNS recording</string>
+    <string name="notification_dns_recording_channel_description">DNS request recording notifications</string>
+    <string name="notification_dns_recording_title">Recording DNS requests</string>
+    <string name="notification_dns_recording_text">Tap to open the DNS log.</string>
     <!-- VPN notification -->
     <string name="notification_vpn_channel_name">VPN</string>
     <string name="notification_vpn_channel_description">VPN running notifications</string>

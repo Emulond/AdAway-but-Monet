@@ -20,6 +20,7 @@ import org.adaway.model.error.HostError.COPY_FAIL
 import org.adaway.model.error.HostError.NOT_ENOUGH_SPACE
 import org.adaway.model.error.HostError.PRIVATE_FILE_FAILED
 import org.adaway.model.error.HostError.REVERT_FAIL
+import org.adaway.helper.NotificationHelper
 import org.adaway.model.error.HostErrorException
 import org.adaway.model.root.MountType.READ_ONLY
 import org.adaway.model.root.MountType.READ_WRITE
@@ -93,9 +94,15 @@ class RootModel(context: Context) : AdBlockModel(context) {
 
     override fun setRecordingLogs(recording: Boolean) {
         if (recording) {
-            TcpdumpUtils.startTcpdump(this.context)
+            // Only advertise a running capture once it is confirmed to be alive.
+            if (TcpdumpUtils.startTcpdump(this.context)) {
+                NotificationHelper.showDnsRecordingNotification(this.context)
+            } else {
+                NotificationHelper.clearDnsRecordingNotification(this.context)
+            }
         } else {
             TcpdumpUtils.stopTcpdump()
+            NotificationHelper.clearDnsRecordingNotification(this.context)
         }
     }
 

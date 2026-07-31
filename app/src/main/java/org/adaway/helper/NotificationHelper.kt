@@ -15,11 +15,13 @@ import org.adaway.ui.navigation.NavigationRequest
 object NotificationHelper {
     const val UPDATE_NOTIFICATION_CHANNEL = "UpdateChannel"
     const val VPN_SERVICE_NOTIFICATION_CHANNEL = "VpnServiceChannel"
+    const val DNS_RECORDING_NOTIFICATION_CHANNEL = "DnsRecordingChannel"
     
     private const val UPDATE_HOSTS_NOTIFICATION_ID = 10
     private const val UPDATE_APP_NOTIFICATION_ID = 11
     private const val UPDATE_HOSTS_PROGRESS_NOTIFICATION_ID = 16
     private const val UPDATE_APP_PROGRESS_NOTIFICATION_ID = 17
+    private const val DNS_RECORDING_NOTIFICATION_ID = 18
     
     @JvmField
     val VPN_RUNNING_SERVICE_NOTIFICATION_ID = 20
@@ -49,8 +51,61 @@ object NotificationHelper {
             description = context.getString(R.string.notification_vpn_channel_description)
         }
 
+        // Create DNS recording notification channel
+        val dnsRecordingChannel = NotificationChannel(
+            DNS_RECORDING_NOTIFICATION_CHANNEL,
+            context.getString(R.string.notification_dns_recording_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = context.getString(R.string.notification_dns_recording_channel_description)
+        }
+
         notificationManager.createNotificationChannel(updateChannel)
         notificationManager.createNotificationChannel(vpnServiceChannel)
+        notificationManager.createNotificationChannel(dnsRecordingChannel)
+    }
+
+    /**
+     * Show the ongoing notification for an active DNS request recording.
+     */
+    @JvmStatic
+    fun showDnsRecordingNotification(context: Context) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
+        if (notificationManager == null || !notificationManager.areNotificationsEnabled()) {
+            return
+        }
+
+        val intent = Intent(context, HomeActivity::class.java).apply {
+            putExtra(NavigationRequest.EXTRA_ROUTE, AdAwayRoute.LOG)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, DNS_RECORDING_NOTIFICATION_CHANNEL)
+            .setSmallIcon(R.drawable.logo)
+            .setColor(context.getColor(R.color.notification))
+            .setContentTitle(context.getString(R.string.notification_dns_recording_title))
+            .setContentText(context.getString(R.string.notification_dns_recording_text))
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setShowWhen(false)
+
+        notificationManager.notify(DNS_RECORDING_NOTIFICATION_ID, builder.build())
+    }
+
+    /**
+     * Clear the DNS request recording notification.
+     */
+    @JvmStatic
+    fun clearDnsRecordingNotification(context: Context) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        notificationManager.cancel(DNS_RECORDING_NOTIFICATION_ID)
     }
 
     @JvmStatic

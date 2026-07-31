@@ -29,11 +29,27 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
     val logs: StateFlow<List<LogEntry>> = _logs
 
-    private val _recording = MutableStateFlow(adBlockModel.isRecordingLogs)
+    private val _recording = MutableStateFlow(false)
     val recording: StateFlow<Boolean> = _recording
+
 
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
+
+    init {
+        refreshRecordingState()
+    }
+
+    /**
+     * Read the recording state back from the ad block model.
+     * It queries the running processes through a privileged shell, so it never runs on the main
+     * thread.
+     */
+    fun refreshRecordingState() {
+        viewModelScope.launch {
+            _recording.value = withContext(Dispatchers.IO) { adBlockModel.isRecordingLogs }
+        }
+    }
 
     fun areBlockedRequestsIgnored(): Boolean = adBlockModel.method == AdBlockMethod.ROOT
 
@@ -69,9 +85,15 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleRecording() {
-        val recording = !adBlockModel.isRecordingLogs
-        adBlockModel.setRecordingLogs(recording)
-        _recording.value = recording
+        viewModelScope.launch {
+            val enable = !_recording.value
+            // Report the state the capture actually ended in rather than the requested one, so a
+            // capture that fails to start does not leave the control showing as enabled.
+            _recording.value = withContext(Dispatchers.IO) {
+                adBlockModel.setRecordingLogs(enable)
+                adBlockModel.isRecordingLogs
+            }
+        }
     }
 
     fun addListItem(host: String, type: ListType, redirection: String?) {
