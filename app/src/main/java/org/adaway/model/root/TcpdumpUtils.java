@@ -48,6 +48,14 @@ class TcpdumpUtils {
     private static final String TCPDUMP_EXECUTABLE = "tcpdump";
     private static final String TCPDUMP_LOG = "dns_log.txt";
     private static final String TCPDUMP_HOSTNAME_REGEX = "(?:A\\?|AAAA\\?)\\s(\\S+)\\.\\s";
+    /**
+     * The delay before checking the capture is still alive, in milliseconds.
+     */
+    private static final long START_CHECK_DELAY_MS = 500L;
+    /**
+     * The number of log file lines reported when a capture fails to start.
+     */
+    private static final int LOG_TAIL_LINES = 10;
     private static final Pattern TCPDUMP_HOSTNAME_PATTERN = Pattern.compile(TCPDUMP_HOSTNAME_REGEX);
 
     /**
@@ -96,7 +104,42 @@ class TcpdumpUtils {
         // "-s 0": capture first 512 bit of packet to get DNS content
         String parameters = "-i any -p -l -v -t -s 512 'udp dst port 53' >> " + file + " 2>&1";
 
-        return runBundledExecutable(context, TCPDUMP_EXECUTABLE, parameters);
+        if (!runBundledExecutable(context, TCPDUMP_EXECUTABLE, parameters)) {
+            Timber.w("Failed to start tcpdump.");
+            return false;
+        }
+        // The executable is backgrounded by the shell, so a successful command only means it was
+        // launched. Give it a moment and check it is still alive, otherwise a tcpdump that exits
+        // straight away is reported as a running capture.
+        try {
+            Thread.sleep(START_CHECK_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return isTcpdumpRunning();
+        }
+        boolean running = isTcpdumpRunning();
+        if (!running) {
+            // Anything tcpdump printed before dying was redirected to the log file.
+            Timber.w("Tcpdump exited right after being started. Log file content: %s",
+                    readLogFileTail(context));
+        }
+        return running;
+    }
+
+    /**
+     * Read the end of the log file, to report why a capture did not start.
+     *
+     * @param context The application context.
+     * @return The last lines of the log file, or an empty string if it could not be read.
+     */
+    private static String readLogFileTail(Context context) {
+        try {
+            List<String> lines = Files.readAllLines(getLogFile(context).toPath());
+            int from = Math.max(0, lines.size() - LOG_TAIL_LINES);
+            return String.join("\n", lines.subList(from, lines.size()));
+        } catch (IOException | RuntimeException e) {
+            return "";
+        }
     }
 
     /**
@@ -195,7 +238,6 @@ class TcpdumpUtils {
         if (tcpdumpHostnameMatcher.find()) {
             return tcpdumpHostnameMatcher.group(1);
         } else {
-            Timber.d("Does not find: %s.", input);
             return null;
         }
     }
