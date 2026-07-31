@@ -72,6 +72,10 @@ public class SourceModel {
      */
     private final Context context;
     /**
+     * The application database.
+     */
+    private final AppDatabase database;
+    /**
      * The {@link HostsSource} DAO.
      */
     private final HostsSourceDao hostsSourceDao;
@@ -103,7 +107,8 @@ public class SourceModel {
      */
     public SourceModel(Context context) {
         this.context = context;
-        AppDatabase database = AppDatabase.getInstance(this.context);
+        this.database = AppDatabase.getInstance(this.context);
+        AppDatabase database = this.database;
         this.hostsSourceDao = database.hostsSourceDao();
         this.hostListItemDao = database.hostsListItemDao();
         this.hostEntryDao = database.hostEntryDao();
@@ -373,7 +378,9 @@ public class SourceModel {
      */
     public void syncHostEntries() {
         setState(R.string.status_sync_database);
-        this.hostEntryDao.sync();
+        // Run the whole rebuild as a single transaction, otherwise every statement below pays
+        // for its own commit which dominates the cost on large host lists.
+        this.database.runInTransaction(this.hostEntryDao::sync);
     }
 
     /**

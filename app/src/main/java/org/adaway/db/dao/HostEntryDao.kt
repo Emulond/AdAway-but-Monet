@@ -24,29 +24,56 @@ interface HostEntryDao {
     @Query("DELETE FROM `host_entries` WHERE `host` LIKE :hostPattern")
     fun allowHost(hostPattern: String)
 
+    @Query("DELETE FROM `host_entries` WHERE `host` IN (:hosts)")
+    fun allowHosts(hosts: List<String>)
+
     @get:Query("SELECT * FROM hosts_lists WHERE type = 2 AND enabled = 1 ORDER BY host ASC, source_id DESC")
     val enabledRedirectedHosts: List<HostListItem>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun redirectHost(redirection: HostEntry)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun redirectHosts(redirections: List<HostEntry>)
+
     fun sync() {
         clear()
         importBlocked()
-        for (allowedHost in enabledAllowedHosts) {
+        applyAllowList()
+        applyRedirectList()
+    }
+
+    /**
+     * Remove the allowed hosts from the entries.
+     *
+     * Hosts without wildcard are removed by exact match so the unique index on `host` is used.
+     * Only the few entries carrying a wildcard fall back to `LIKE`, which cannot use that index
+     * and therefore scans the whole table once per pattern.
+     */
+    private fun applyAllowList() {
+        val (wildcards, exacts) = enabledAllowedHosts.partition { host ->
+            host.indexOf('*') != -1 || host.indexOf('?') != -1
+        }
+        exacts.chunked(DELETE_CHUNK_SIZE).forEach(::allowHosts)
+        for (allowedHost in wildcards) {
             val hostPattern = A_CHAR_PATTERN.matcher(
                 ANY_CHAR_PATTERN.matcher(allowedHost).replaceAll("%")
             ).replaceAll("_")
             allowHost(hostPattern)
         }
-        for (redirectedHost in enabledRedirectedHosts) {
-            val entry = HostEntry().apply {
-                host = redirectedHost.host
-                type = REDIRECTED
-                redirection = redirectedHost.redirection
+    }
+
+    private fun applyRedirectList() {
+        enabledRedirectedHosts.asSequence()
+            .map { redirectedHost ->
+                HostEntry().apply {
+                    host = redirectedHost.host
+                    type = REDIRECTED
+                    redirection = redirectedHost.redirection
+                }
             }
-            redirectHost(entry)
-        }
+            .chunked(INSERT_CHUNK_SIZE)
+            .forEach(::redirectHosts)
     }
 
     @get:Query("SELECT * FROM `host_entries` ORDER BY `host`")
@@ -62,6 +89,17 @@ interface HostEntryDao {
     fun getEntry(host: String): HostEntry?
 
     companion object {
+        /**
+         * The number of host names bound to a single statement.
+         * Kept well below the SQLite bound parameter limit (999 on older Android versions).
+         */
+        private const val DELETE_CHUNK_SIZE = 500
+
+        /**
+         * The number of redirections inserted per transaction.
+         */
+        private const val INSERT_CHUNK_SIZE = 1000
+
         private val ANY_CHAR_PATTERN: Pattern = Pattern.compile("\\*")
         private val A_CHAR_PATTERN: Pattern = Pattern.compile("\\?")
     }
