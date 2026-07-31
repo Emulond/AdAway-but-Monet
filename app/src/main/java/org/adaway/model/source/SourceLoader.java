@@ -36,7 +36,8 @@ import timber.log.Timber;
 class SourceLoader {
     private static final String TAG = "SourceLoader";
     private static final String END_OF_QUEUE_MARKER = "#EndOfQueueMarker";
-    private static final int INSERT_BATCH_SIZE = 100;
+    private static final int INSERT_BATCH_SIZE = 2_000;
+    private static final int QUEUE_CAPACITY = 10_000;
     private static final String HOSTS_PARSER = "^\\s*([^#\\s]+)\\s+([^#\\s]+).*$";
     static final Pattern HOSTS_PARSER_PATTERN = Pattern.compile(HOSTS_PARSER);
 
@@ -51,8 +52,8 @@ class SourceLoader {
         hostListItemDao.clearSourceHosts(this.source.getId());
         // Create batch
         int parserCount = 3;
-        LinkedBlockingQueue<String> hostsLineQueue = new LinkedBlockingQueue<>();
-        LinkedBlockingQueue<HostListItem> hostsListItemQueue = new LinkedBlockingQueue<>();
+        LinkedBlockingQueue<String> hostsLineQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
+        LinkedBlockingQueue<HostListItem> hostsListItemQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
         SourceReader sourceReader = new SourceReader(reader, hostsLineQueue, parserCount);
         ItemInserter inserter = new ItemInserter(hostsListItemQueue, hostListItemDao, parserCount);
         ExecutorService executorService = Executors.newFixedThreadPool(
@@ -76,6 +77,24 @@ class SourceLoader {
         executorService.shutdown();
     }
 
+    private static <T> void putUninterruptibly(BlockingQueue<T> queue, T item) {
+        boolean interrupted = Thread.interrupted();
+        try {
+            while (true) {
+                try {
+                    queue.put(item);
+                    return;
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
     private static class SourceReader implements Runnable {
         private final BufferedReader reader;
         private final BlockingQueue<String> queue;
@@ -90,13 +109,18 @@ class SourceLoader {
         @Override
         public void run() {
             try {
-                this.reader.lines().forEach(this.queue::add);
+                for (String line : (Iterable<String>) this.reader.lines()::iterator) {
+                    this.queue.put(line);
+                }
+            } catch (InterruptedException e) {
+                Timber.w(e, "Interrupted while reading hosts source.");
+                Thread.currentThread().interrupt();
             } catch (Throwable t) {
                 Timber.w(t, "Failed to read hosts source.");
             } finally {
                 // Send end of queue marker to parsers
                 for (int i = 0; i < this.parserCount; i++) {
-                    this.queue.add(END_OF_QUEUE_MARKER);
+                    putUninterruptibly(this.queue, END_OF_QUEUE_MARKER);
                 }
             }
         }
@@ -127,14 +151,15 @@ class SourceLoader {
                         // Send end of queue marker to inserter
                         HostListItem endItem = new HostListItem();
                         endItem.setHost(line);
-                        this.itemQueue.add(endItem);
+                        // The inserter waits for one marker per parser, so it must always arrive.
+                        putUninterruptibly(this.itemQueue, endItem);
                     } // Check comments
                     else if (line.isEmpty() || line.charAt(0) == '#') {
-                        Timber.d("Skip comment: %s.", line);
+                        // Skip comment. Not logged: this runs once per source line.
                     } else {
                         HostListItem item = allowedList ? parseAllowListItem(line) : parseHostListItem(line);
                         if (item != null && isRedirectionValid(item) && isHostValid(item)) {
-                            this.itemQueue.add(item);
+                            this.itemQueue.put(item);
                         }
                     }
                 } catch (InterruptedException e) {
@@ -148,7 +173,7 @@ class SourceLoader {
         private HostListItem parseHostListItem(String line) {
             Matcher matcher = HOSTS_PARSER_PATTERN.matcher(line);
             if (!matcher.matches()) {
-                Timber.d("Does not match: %s.", line);
+                // Not logged: this runs once per source line.
                 return null;
             }
             // Check IP address validity or while list entry (if allowed)
