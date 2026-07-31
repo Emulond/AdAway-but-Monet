@@ -265,4 +265,24 @@ object PreferenceHelper {
             .putStringSet(context.getString(R.string.pref_vpn_excluded_user_apps_key), excludedApplicationPackageNames)
             .apply()
     }
+
+    /**
+     * Get the last known ad blocking state, as displayed by the quick settings tile.
+     * It avoids opening a privileged shell only to render the tile.
+     */
+    @JvmStatic
+    fun getLastKnownAdBlocked(context: Context): Boolean {
+        return context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_LAST_KNOWN_AD_BLOCKED, false)
+    }
+
+    @JvmStatic
+    fun setLastKnownAdBlocked(context: Context, value: Boolean) {
+        context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_LAST_KNOWN_AD_BLOCKED, value)
+            .apply()
+    }
+
+    private const val PREF_LAST_KNOWN_AD_BLOCKED = "lastKnownAdBlocked"
 }
