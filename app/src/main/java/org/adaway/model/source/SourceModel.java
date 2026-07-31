@@ -41,6 +41,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.MalformedURLException;
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -62,6 +63,20 @@ public class SourceModel {
      * The HTTP client cache size (100Mo).
      */
     private static final long CACHE_SIZE = 100L * 1024L * 1024L;
+    /**
+     * The time to establish a connection to a source.
+     */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
+    /**
+     * The time allowed between two chunks of a source response.
+     * A stalled download fails after this delay instead of hanging forever.
+     */
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
+    /**
+     * The time allowed for a whole update check.
+     * Only applied to the header requests, as downloading a large source legitimately takes longer.
+     */
+    private static final Duration CHECK_CALL_TIMEOUT = Duration.ofMinutes(2);
     private static final String LAST_MODIFIED_HEADER = "Last-Modified";
     private static final String IF_NONE_MATCH_HEADER = "If-None-Match";
     private static final String IF_MODIFIED_SINCE_HEADER = "If-Modified-Since";
@@ -99,6 +114,11 @@ public class SourceModel {
      * The HTTP client to download hosts sources ({@code null} until initialized by {@link #getHttpClient()}).
      */
     private OkHttpClient cachedHttpClient;
+    /**
+     * The HTTP client to check hosts sources, bounded by an overall call timeout
+     * ({@code null} until initialized by {@link #getCheckHttpClient()}).
+     */
+    private OkHttpClient cachedCheckHttpClient;
 
     /**
      * Constructor.
@@ -263,7 +283,7 @@ public class SourceModel {
         }
         // Default hosting
         Request request = getRequestFor(source).head().build();
-        try (Response response = getHttpClient().newCall(request).execute()) {
+        try (Response response = getCheckHttpClient().newCall(request).execute()) {
             String lastModified = response.header(LAST_MODIFIED_HEADER);
             if (lastModified == null) {
                 return response.code() == HTTP_NOT_MODIFIED ?
@@ -429,9 +449,28 @@ public class SourceModel {
         if (this.cachedHttpClient == null) {
             this.cachedHttpClient = new OkHttpClient.Builder()
                     .cache(new Cache(this.context.getCacheDir(), CACHE_SIZE))
+                    .connectTimeout(CONNECT_TIMEOUT)
+                    .readTimeout(READ_TIMEOUT)
                     .build();
         }
         return this.cachedHttpClient;
+    }
+
+    /**
+     * Get the HTTP client to check hosts sources for update.
+     * It shares the connection pool of {@link #getHttpClient()} and adds an overall call timeout,
+     * which is safe here because these requests carry no body.
+     *
+     * @return The HTTP client to check hosts sources.
+     */
+    @NonNull
+    private OkHttpClient getCheckHttpClient() {
+        if (this.cachedCheckHttpClient == null) {
+            this.cachedCheckHttpClient = getHttpClient().newBuilder()
+                    .callTimeout(CHECK_CALL_TIMEOUT)
+                    .build();
+        }
+        return this.cachedCheckHttpClient;
     }
 
     /**
