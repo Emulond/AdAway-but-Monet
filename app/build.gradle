@@ -56,6 +56,12 @@ android {
         compose = true
     }
 
+    androidResources {
+        // Generate the locale configuration from the translated resources, so the app appears in
+        // the per app language settings introduced in Android 13 without a hand maintained list.
+        generateLocaleConfig = true
+    }
+
 
     packagingOptions {
         jniLibs {
