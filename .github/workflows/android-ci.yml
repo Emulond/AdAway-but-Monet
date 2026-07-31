@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+      # Temporary: build this branch too. Remove before merging.
+      - optimisation
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
