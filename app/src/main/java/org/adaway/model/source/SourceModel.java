@@ -29,6 +29,7 @@ import org.adaway.db.converter.ZonedDateTimeConverter;
 import org.adaway.db.dao.HostEntryDao;
 import org.adaway.db.dao.HostListItemDao;
 import org.adaway.db.dao.HostsSourceDao;
+import org.adaway.db.dao.MetadataDao;
 import org.adaway.db.entity.HostEntry;
 import org.adaway.db.entity.HostListItem;
 import org.adaway.db.entity.HostsSource;
@@ -103,6 +104,10 @@ public class SourceModel {
      */
     private final HostEntryDao hostEntryDao;
     /**
+     * The metadata DAO.
+     */
+    private final MetadataDao metadataDao;
+    /**
      * The update available status.
      */
     private final MutableLiveData<Boolean> updateAvailable;
@@ -132,6 +137,7 @@ public class SourceModel {
         this.hostsSourceDao = database.hostsSourceDao();
         this.hostListItemDao = database.hostsListItemDao();
         this.hostEntryDao = database.hostEntryDao();
+        this.metadataDao = database.metadataDao();
         this.state = new MutableLiveData<>("");
         this.updateAvailable = new MutableLiveData<>();
         this.updateAvailable.setValue(false);
@@ -436,7 +442,12 @@ public class SourceModel {
         setState(R.string.status_sync_database);
         // Run the whole rebuild as a single transaction, otherwise every statement below pays
         // for its own commit which dominates the cost on large host lists.
-        this.database.runInTransaction(this.hostEntryDao::sync);
+        this.database.runInTransaction(() -> {
+            this.hostEntryDao.sync();
+            // Recorded in the same transaction as the rebuild it describes, so the generated hosts
+            // file can never be considered current for entries it was not built from.
+            this.metadataDao.markHostEntriesRebuilt();
+        });
     }
 
     /**

@@ -79,6 +79,9 @@ interface HostEntryDao {
     @get:Query("SELECT * FROM `host_entries` ORDER BY `host`")
     val all: List<HostEntry>
 
+    @get:Query("SELECT COUNT(*) FROM `host_entries`")
+    val count: Int
+
     @Query("SELECT `type` FROM `host_entries` WHERE `host` == :host LIMIT 1")
     fun getTypeOfHost(host: String): ListType
 
