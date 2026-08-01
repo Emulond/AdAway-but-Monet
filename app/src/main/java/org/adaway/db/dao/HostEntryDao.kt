@@ -82,6 +82,13 @@ interface HostEntryDao {
     @get:Query("SELECT COUNT(*) FROM `host_entries`")
     val count: Int
 
+    /**
+     * Read a page of entries, ordered by host, starting strictly after the given host.
+     * The host column is unique, so consecutive pages neither overlap nor leave gaps.
+     */
+    @Query("SELECT * FROM `host_entries` WHERE `host` > :afterHost ORDER BY `host` LIMIT :limit")
+    fun getEntriesAfter(afterHost: String, limit: Int): List<HostEntry>
+
     @Query("SELECT `type` FROM `host_entries` WHERE `host` == :host LIMIT 1")
     fun getTypeOfHost(host: String): ListType
 

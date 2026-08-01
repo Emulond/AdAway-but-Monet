@@ -241,20 +241,26 @@ class RootModel(context: Context) : AdBlockModel(context) {
         val redirectionIpv6 = PreferenceHelper.getRedirectionIpv6(this.context)
         val enableIpv6 = PreferenceHelper.getEnableIpv6(this.context)
 
-        for (entry in this.hostEntryDao.all) {
-            val hostname = entry.host
-            if (entry.type == REDIRECTED) {
-                writer.write("${entry.redirection} $hostname")
-                writer.newLine()
-            } else {
-                writer.write("$redirectionIpv4 $hostname")
-                writer.newLine()
-                if (enableIpv6) {
-                    writer.write("$redirectionIpv6 $hostname")
+        // Read the entries in pages: materialising millions of them at once was a large
+        // allocation spike for no benefit, since each one is written and then discarded.
+        HostEntryPager.forEachEntry(
+            fetch = { afterHost, limit -> this.hostEntryDao.getEntriesAfter(afterHost, limit) },
+            hostOf = { it.host },
+            action = { entry ->
+                val hostname = entry.host
+                if (entry.type == REDIRECTED) {
+                    writer.write("${entry.redirection} $hostname")
                     writer.newLine()
+                } else {
+                    writer.write("$redirectionIpv4 $hostname")
+                    writer.newLine()
+                    if (enableIpv6) {
+                        writer.write("$redirectionIpv6 $hostname")
+                        writer.newLine()
+                    }
                 }
             }
-        }
+        )
     }
 
     @Throws(IOException::class)
