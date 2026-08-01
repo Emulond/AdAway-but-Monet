@@ -561,7 +561,7 @@ public class SourceModel {
     private void parseSourceInputStream(HostsSource hostsSource, BufferedReader reader) {
         setState(R.string.status_parse_source, hostsSource.getLabel());
         long startTime = System.currentTimeMillis();
-        new SourceLoader(hostsSource).parse(reader, this.hostListItemDao);
+        new SourceLoader(hostsSource).parse(reader, this.database, this.hostListItemDao);
         long endTime = System.currentTimeMillis();
         Timber.i("Parsed " + hostsSource.getUrl() + " in " + (endTime - startTime) / 1000 + "s");
     }

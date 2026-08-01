@@ -8,6 +8,7 @@ import static org.adaway.util.Constants.LOCALHOST_HOSTNAME;
 import static org.adaway.util.Constants.LOCALHOST_IPV4;
 import static org.adaway.util.Constants.LOCALHOST_IPV6;
 
+import org.adaway.db.AppDatabase;
 import org.adaway.db.dao.HostListItemDao;
 import org.adaway.db.entity.HostListItem;
 import org.adaway.db.entity.HostsSource;
@@ -47,15 +48,14 @@ class SourceLoader {
         this.source = hostsSource;
     }
 
-    void parse(BufferedReader reader, HostListItemDao hostListItemDao) {
-        // Clear current hosts
-        hostListItemDao.clearSourceHosts(this.source.getId());
+    void parse(BufferedReader reader, AppDatabase database, HostListItemDao hostListItemDao) {
         // Create batch
         int parserCount = 3;
         LinkedBlockingQueue<String> hostsLineQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
         LinkedBlockingQueue<HostListItem> hostsListItemQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
         SourceReader sourceReader = new SourceReader(reader, hostsLineQueue, parserCount);
-        ItemInserter inserter = new ItemInserter(hostsListItemQueue, hostListItemDao, parserCount);
+        ItemInserter inserter = new ItemInserter(
+                hostsListItemQueue, database, hostListItemDao, this.source.getId(), parserCount);
         ExecutorService executorService = Executors.newFixedThreadPool(
                 parserCount + 2,
                 r -> new Thread(r, TAG)
@@ -240,17 +240,30 @@ class SourceLoader {
 
     private static class ItemInserter implements Callable<Integer> {
         private final BlockingQueue<HostListItem> hostListItemQueue;
+        private final AppDatabase database;
         private final HostListItemDao hostListItemDao;
+        private final int sourceId;
         private final int parserCount;
 
-        private ItemInserter(BlockingQueue<HostListItem> itemQueue, HostListItemDao hostListItemDao, int parserCount) {
+        private ItemInserter(BlockingQueue<HostListItem> itemQueue, AppDatabase database,
+                             HostListItemDao hostListItemDao, int sourceId, int parserCount) {
             this.hostListItemQueue = itemQueue;
+            this.database = database;
             this.hostListItemDao = hostListItemDao;
+            this.sourceId = sourceId;
             this.parserCount = parserCount;
         }
 
         @Override
         public Integer call() {
+            // Clear the previous hosts and insert the new ones in a single transaction, on this
+            // thread. Readers keep seeing the previous content until it commits, so the host
+            // counters no longer drop while a source is being reloaded.
+            return this.database.runInTransaction(this::insertAll);
+        }
+
+        private Integer insertAll() {
+            this.hostListItemDao.clearSourceHosts(this.sourceId);
             int inserted = 0;
             int workerStopped = 0;
             HostListItem[] batch = new HostListItem[INSERT_BATCH_SIZE];
