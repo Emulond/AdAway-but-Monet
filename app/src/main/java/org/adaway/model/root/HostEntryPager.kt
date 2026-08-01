@@ -40,14 +40,15 @@ object HostEntryPager {
             if (page.isEmpty()) {
                 return visited
             }
+            val lastHost = hostOf(page.last())
+            // Guard against a fetch that does not advance. Checked before the page is visited, so
+            // a page that repeats the previous one is discarded rather than emitted twice.
+            if (lastHost <= afterHost) {
+                return visited
+            }
             for (entry in page) {
                 action(entry)
                 visited++
-            }
-            val lastHost = hostOf(page.last())
-            // Guard against a fetch that does not advance, which would otherwise loop forever.
-            if (lastHost <= afterHost) {
-                return visited
             }
             afterHost = lastHost
             // A short page means the end of the table was reached.
