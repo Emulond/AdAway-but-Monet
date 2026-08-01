@@ -26,7 +26,9 @@ import org.adaway.model.adblocking.AdBlockMethod
 import org.adaway.model.adblocking.AdBlockModel
 import org.adaway.model.error.HostError
 import org.adaway.model.error.HostErrorException
+import org.adaway.db.entity.HostsSource
 import org.adaway.model.source.SourceModel
+import org.adaway.model.source.SourceUpdateStatus
 import org.adaway.model.update.Manifest
 import org.adaway.model.update.UpdateModel
 import org.adaway.vpn.VpnStatusRepository
@@ -111,15 +113,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         .map { it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), 0)
 
-    val upToDateSourceCount: StateFlow<Int> = hostsSourceDao.countUpToDate()
+    /**
+     * The enabled sources, classified into up to date and outdated.
+     * Both counts come from the same list so they always add up to the number of enabled sources.
+     */
+    private val enabledSources = hostsSourceDao.loadAll()
         .asFlow()
-        .map { it }
+        .map { sources -> sources.filter { it.isEnabled } }
+
+    val upToDateSourceCount: StateFlow<Int> = enabledSources
+        .map { sources -> sources.count { it.isUpToDate() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), 0)
 
-    val outdatedSourceCount: StateFlow<Int> = hostsSourceDao.countOutdated()
-        .asFlow()
-        .map { it }
+    val outdatedSourceCount: StateFlow<Int> = enabledSources
+        .map { sources -> sources.count { !it.isUpToDate() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), 0)
+
+    private fun HostsSource.isUpToDate(): Boolean =
+        SourceUpdateStatus.isUpToDate(localModificationDate, onlineModificationDate)
 
     fun checkForAppUpdate() {
         viewModelScope.launch(Dispatchers.IO) {

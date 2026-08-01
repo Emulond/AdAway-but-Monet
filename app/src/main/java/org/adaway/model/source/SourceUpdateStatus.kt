@@ -1,0 +1,37 @@
+package org.adaway.model.source
+
+import java.time.ZonedDateTime
+
+/**
+ * The update status of a hosts source.
+ *
+ * A source is either up to date or outdated, with no third state. Classifying it here rather than
+ * with a pair of SQL predicates keeps the two states exhaustive by construction: previously a
+ * source with either modification date unset matched neither predicate and was counted nowhere.
+ */
+object SourceUpdateStatus {
+    /**
+     * Tell whether a source is up to date.
+     *
+     * @param localModificationDate The date the source was last installed, or {@code null} when it
+     * was never installed.
+     * @param onlineModificationDate The date the source was last modified online, or {@code null}
+     * when the server does not report one.
+     * @return {@code true} when the source is up to date, {@code false} when it is outdated.
+     */
+    @JvmStatic
+    fun isUpToDate(
+        localModificationDate: ZonedDateTime?,
+        onlineModificationDate: ZonedDateTime?
+    ): Boolean {
+        // Never installed: there is nothing on the device yet, so it is outdated.
+        if (localModificationDate == null) {
+            return false
+        }
+        // Installed, and no newer version is known to exist.
+        if (onlineModificationDate == null) {
+            return true
+        }
+        return !onlineModificationDate.isAfter(localModificationDate)
+    }
+}

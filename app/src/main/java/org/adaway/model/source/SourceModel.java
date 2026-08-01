@@ -196,16 +196,14 @@ public class SourceModel {
             Timber.d("lastModifiedOnline: %s", dateToString(lastModifiedOnline));
             // Save last modified online
             this.hostsSourceDao.updateOnlineModificationDate(source.getId(), lastModifiedOnline);
-            // Check if last modified online retrieved
-            if (lastModifiedOnline == null) {
-                // If not, consider update is available if install is older than a week
+            // Classify the source the same way the home screen counters do, so what is reported
+            // as outdated is exactly what pressing update acts on.
+            if (!SourceUpdateStatus.isUpToDate(lastModifiedLocal, lastModifiedOnline)) {
+                updateAvailable = true;
+            } else if (lastModifiedOnline == null) {
+                // The source reports no online date, so refresh it once a week regardless.
                 ZonedDateTime lastWeek = ZonedDateTime.now().minus(1, WEEKS);
-                if (lastModifiedLocal != null && lastModifiedLocal.isBefore(lastWeek)) {
-                    updateAvailable = true;
-                }
-            } else {
-                // Check if source was never installed or installed before the last update
-                if (lastModifiedLocal == null || lastModifiedOnline.isAfter(lastModifiedLocal)) {
+                if (lastModifiedLocal.isBefore(lastWeek)) {
                     updateAvailable = true;
                 }
             }
