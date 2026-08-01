@@ -150,25 +150,52 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Check the sources for update and retrieve them when at least one is outdated.
+     *
+     * This is the single entry point behind the home screen update action: checking without
+     * retrieving left the user to notice the result and press a second button.
+     */
     fun update() {
         if (_pending.value) {
             return
         }
         viewModelScope.launch {
+            val application = getApplication<Application>()
+            var retrieving = false
             try {
                 _pending.value = true
                 withContext(Dispatchers.IO) {
-                    sourceModel.checkForUpdate()
+                    if (!sourceModel.checkForUpdate()) {
+                        return@withContext
+                    }
+                    retrieving = true
+                    NotificationHelper.showUpdateHostsProgressNotification(application)
+                    sourceModel.retrieveHostsSources { completed, total, label ->
+                        NotificationHelper.showUpdateHostsProgressNotification(
+                            application,
+                            completed,
+                            total,
+                            label
+                        )
+                    }
+                    adBlockModel.apply()
                 }
             } catch (exception: HostErrorException) {
                 Timber.w(exception, "Failed to update.")
                 _error.emit(exception.error)
             } finally {
+                if (retrieving) {
+                    NotificationHelper.clearUpdateHostsProgressNotification(application)
+                }
                 _pending.value = false
             }
         }
     }
 
+    /**
+     * Retrieve the sources unconditionally, without checking them for update first.
+     */
     fun sync() {
         if (_pending.value) {
             return
@@ -179,7 +206,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _pending.value = true
                 NotificationHelper.showUpdateHostsProgressNotification(application)
                 withContext(Dispatchers.IO) {
-                    sourceModel.retrieveHostsSources()
+                    sourceModel.retrieveHostsSources { completed, total, label ->
+                        NotificationHelper.showUpdateHostsProgressNotification(
+                            application,
+                            completed,
+                            total,
+                            label
+                        )
+                    }
                     adBlockModel.apply()
                 }
             } catch (exception: HostErrorException) {

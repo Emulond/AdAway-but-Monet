@@ -199,7 +199,9 @@ private data class HomeScreenState(
     val stateText: String = "",
     val adBlocked: Boolean = false,
     val drawerVisible: Boolean = false
-)
+) {
+    val totalSourceCount: Int get() = upToDateSourceCount + outdatedSourceCount
+}
 
 @Composable
 internal fun HomeRoute(
@@ -270,7 +272,6 @@ internal fun HomeRoute(
         onOpenRedirectedList = onOpenRedirectedList,
         onOpenSources = onOpenSources,
         onCheckSources = viewModel::update,
-        onSyncSources = viewModel::sync,
         onOpenLog = onOpenLog,
         onOpenHelp = onOpenHelp,
         onOpenSupport = onOpenSupport,
@@ -298,7 +299,6 @@ private fun HomeScreen(
     onOpenRedirectedList: () -> Unit,
     onOpenSources: () -> Unit,
     onCheckSources: () -> Unit,
-    onSyncSources: () -> Unit,
     onOpenLog: () -> Unit,
     onOpenHelp: () -> Unit,
     onOpenSupport: () -> Unit,
@@ -412,8 +412,7 @@ private fun HomeScreen(
             SourceStatusSection(
                 state = state,
                 onOpenSources = onOpenSources,
-                onCheckSources = onCheckSources,
-                onSyncSources = onSyncSources
+                onCheckSources = onCheckSources
             )
 
             Row(
@@ -705,8 +704,7 @@ private fun HomeMetricCard(
 private fun SourceStatusSection(
     state: HomeScreenState,
     onOpenSources: () -> Unit,
-    onCheckSources: () -> Unit,
-    onSyncSources: () -> Unit
+    onCheckSources: () -> Unit
 ) {
     ExpressiveSection(
         modifier = Modifier
@@ -739,46 +737,36 @@ private fun SourceStatusSection(
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = pluralStringResource(
-                            R.plurals.up_to_date_source_label,
+                        text = stringResource(
+                            R.string.up_to_date_source_ratio_label,
                             state.upToDateSourceCount,
-                            state.upToDateSourceCount
+                            state.totalSourceCount
                         ),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = pluralStringResource(
-                            R.plurals.outdated_source_label,
-                            state.outdatedSourceCount,
-                            state.outdatedSourceCount
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (state.outdatedSourceCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (state.outdatedSourceCount > 0) {
+                        Text(
+                            text = pluralStringResource(
+                                R.plurals.outdated_source_label,
+                                state.outdatedSourceCount,
+                                state.outdatedSourceCount
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
                 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onCheckSources,
-                        modifier = Modifier.then(if (state.pending) Modifier.size(0.dp) else Modifier)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_sync_24dp),
-                            contentDescription = stringResource(R.string.check_hosts_update_description),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(
-                        onClick = onSyncSources,
-                        modifier = Modifier.then(if (state.pending) Modifier.size(0.dp) else Modifier)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_get_app_24dp),
-                            contentDescription = stringResource(R.string.update_hosts_description),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                IconButton(
+                    onClick = onCheckSources,
+                    modifier = Modifier.then(if (state.pending) Modifier.size(0.dp) else Modifier)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_sync_24dp),
+                        contentDescription = stringResource(R.string.update_hosts_description),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
             
