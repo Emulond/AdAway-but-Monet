@@ -75,6 +75,14 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
 
+    /**
+     * Whether the recorded requests have been read at least once.
+     * Until they have, the screen says nothing about an empty list, since it does not yet know
+     * whether it is empty.
+     */
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded
+
     init {
         refreshRecordingState()
     }
@@ -108,6 +116,7 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     fun clearLogs() {
         adBlockModel.clearLogs()
         _logs.value = emptyList()
+        _loaded.value = true
         _refreshing.value = false
     }
 
@@ -140,6 +149,7 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
                 // every resume of the screen, whether or not the capture is still running.
                 Timber.w(exception, "Failed to read the captured DNS requests.")
             } finally {
+                _loaded.value = true
                 _refreshing.value = false
             }
         }

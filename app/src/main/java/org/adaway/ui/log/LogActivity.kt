@@ -120,6 +120,7 @@ internal fun LogRoute(
     val recordingMessage by viewModel.recordingMessage.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val logs by viewModel.visibleLogs.collectAsStateWithLifecycle()
+    val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val sort by viewModel.sort.collectAsStateWithLifecycle()
     val blockedRequestsIgnored = remember(viewModel) { viewModel.areBlockedRequestsIgnored() }
@@ -138,6 +139,7 @@ internal fun LogRoute(
 
     LogScreen(
         logs = logs,
+        loaded = loaded,
         recording = recording,
         togglingRecording = togglingRecording,
         refreshing = refreshing,
@@ -193,6 +195,7 @@ internal fun LogRoute(
 @Composable
 private fun LogScreen(
     logs: List<LogEntry>,
+    loaded: Boolean,
     recording: Boolean,
     togglingRecording: Boolean,
     refreshing: Boolean,
@@ -307,11 +310,16 @@ private fun LogScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (logs.isEmpty()) {
-                        item(key = "empty") {
-                            EmptyMessage(
-                                searchQuery = searchQuery,
-                                blockedRequestsIgnored = blockedRequestsIgnored
-                            )
+                        // Nothing is said about an empty list until the recorded requests have
+                        // been read: telling the user to start recording, only to replace it with
+                        // what was already recorded, read as a screen that had lost its content.
+                        if (loaded) {
+                            item(key = "empty") {
+                                EmptyMessage(
+                                    searchQuery = searchQuery,
+                                    blockedRequestsIgnored = blockedRequestsIgnored
+                                )
+                            }
                         }
                     } else {
                         itemsIndexed(
