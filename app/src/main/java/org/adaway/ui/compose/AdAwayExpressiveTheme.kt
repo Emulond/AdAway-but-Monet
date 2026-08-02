@@ -401,16 +401,21 @@ fun ExpressiveTopBar(
     title: String,
     onNavigateBack: (() -> Unit)? = null,
     navigationContentDescription: String = stringResource(R.string.welcome_back_button),
+    titleContent: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     ExpressiveFloatingBar {
         CenterAlignedTopAppBar(
             title = {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
+                if (titleContent != null) {
+                    titleContent()
+                } else {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             },
             navigationIcon = {
                 if (onNavigateBack != null) {

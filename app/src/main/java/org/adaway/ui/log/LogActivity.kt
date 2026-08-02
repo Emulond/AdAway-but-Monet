@@ -2,23 +2,33 @@ package org.adaway.ui.log
 
 import android.content.Intent
 import android.net.Uri
+import android.text.format.DateFormat
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,13 +47,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,7 +66,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.delay
 import org.adaway.R
 import org.adaway.db.entity.ListType
 import org.adaway.ui.adblocking.ApplyConfigurationSnackbar
@@ -60,10 +74,12 @@ import org.adaway.ui.compose.ExpressiveAsymmetricShape2
 import org.adaway.ui.compose.ExpressiveScaffold
 import org.adaway.ui.compose.ExpressiveSection
 import org.adaway.ui.compose.ExpressiveTopBar
-import org.adaway.ui.compose.WavyProgressIndicator
 import org.adaway.ui.compose.safeCombinedClickable
 import org.adaway.util.Clipboard
 import org.adaway.util.RegexUtils
+import java.time.Instant
+import java.time.ZoneId
+import java.util.Date
 
 private fun onLogEntryAction(
     context: android.content.Context,
@@ -106,9 +122,12 @@ internal fun LogRoute(
     }
     var redirectHost by remember { mutableStateOf<String?>(null) }
     val recording by viewModel.recording.collectAsStateWithLifecycle()
+    val togglingRecording by viewModel.togglingRecording.collectAsStateWithLifecycle()
     val recordingMessage by viewModel.recordingMessage.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
-    val logs by viewModel.logs.collectAsStateWithLifecycle()
+    val logs by viewModel.visibleLogs.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val sort by viewModel.sort.collectAsStateWithLifecycle()
     val blockedRequestsIgnored = remember(viewModel) { viewModel.areBlockedRequestsIgnored() }
 
     DisposableEffect(lifecycleOwner, viewModel) {
@@ -126,12 +145,16 @@ internal fun LogRoute(
     LogScreen(
         logs = logs,
         recording = recording,
+        togglingRecording = togglingRecording,
         refreshing = refreshing,
+        searchQuery = searchQuery,
+        sort = sort,
         blockedRequestsIgnored = blockedRequestsIgnored,
         onNavigateBack = onNavigateBack,
         onSort = viewModel::toggleSort,
         onClear = viewModel::clearLogs,
         onRefresh = viewModel::updateLogs,
+        onSearch = viewModel::search,
         onToggleRecording = viewModel::toggleRecording,
         onEntryAction = { entry, targetType ->
             onLogEntryAction(
@@ -172,72 +195,87 @@ internal fun LogRoute(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LogScreen(
     logs: List<LogEntry>,
     recording: Boolean,
+    togglingRecording: Boolean,
     refreshing: Boolean,
+    searchQuery: String,
+    sort: LogEntrySort,
     blockedRequestsIgnored: Boolean,
     onNavigateBack: () -> Unit,
     onSort: () -> Unit,
     onClear: () -> Unit,
     onRefresh: () -> Unit,
+    onSearch: (String) -> Unit,
     onToggleRecording: () -> Unit,
     onEntryAction: (LogEntry, ListType) -> Unit,
     onOpenHost: (String) -> Unit,
     onCopyHost: (String) -> Unit
 ) {
+    var searching by remember { mutableStateOf(false) }
+    val closeSearch = {
+        searching = false
+        onSearch("")
+    }
+
     ExpressiveScaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             ExpressiveTopBar(
                 title = stringResource(R.string.shortcut_dns_requests),
-                onNavigateBack = onNavigateBack,
+                onNavigateBack = if (searching) closeSearch else onNavigateBack,
+                titleContent = if (searching) {
+                    { SearchField(query = searchQuery, onQueryChange = onSearch) }
+                } else {
+                    null
+                },
                 actions = {
-                    IconButton(onClick = onSort) {
-                        Icon(
-                            painter = painterResource(R.drawable.baseline_sort_by_alpha_24),
-                            contentDescription = stringResource(R.string.tcpdump_menu_sort)
-                        )
-                    }
-                    IconButton(onClick = onClear) {
-                        Icon(
-                            painter = painterResource(R.drawable.outline_delete_24),
-                            contentDescription = stringResource(R.string.tcpdump_menu_clear)
-                        )
-                    }
-                    IconButton(onClick = onRefresh) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_sync_24dp),
-                            contentDescription = stringResource(R.string.menu_refresh)
-                        )
+                    if (searching) {
+                        IconButton(onClick = closeSearch) {
+                            Icon(
+                                painter = painterResource(R.drawable.baseline_close_24),
+                                contentDescription = stringResource(R.string.log_search_close_description)
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = { searching = true }) {
+                            Icon(
+                                painter = painterResource(R.drawable.baseline_search_24),
+                                contentDescription = stringResource(R.string.log_search_description)
+                            )
+                        }
+                        // The icon stands for the sort in use, so pressing it visibly switches.
+                        AnimatedContent(
+                            targetState = sort,
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            label = "sortIcon"
+                        ) { currentSort ->
+                            IconButton(onClick = onSort) {
+                                Icon(
+                                    painter = painterResource(currentSort.icon),
+                                    contentDescription = stringResource(R.string.tcpdump_menu_sort)
+                                )
+                            }
+                        }
+                        IconButton(onClick = onClear) {
+                            Icon(
+                                painter = painterResource(R.drawable.outline_delete_24),
+                                contentDescription = stringResource(R.string.tcpdump_menu_clear)
+                            )
+                        }
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onToggleRecording,
-                containerColor = if (recording) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.secondaryContainer
-                },
-                contentColor = if (recording) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                },
-                shape = MaterialTheme.shapes.large
-            ) {
-                Icon(
-                    painter = painterResource(
-                        if (recording) R.drawable.ic_pause_24dp else R.drawable.ic_record_24dp
-                    ),
-                    contentDescription = stringResource(R.string.log_toggle_recording_description),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            RecordingButton(
+                recording = recording,
+                busy = togglingRecording,
+                onClick = onToggleRecording
+            )
         }
     ) { innerPadding ->
         Column(
@@ -245,63 +283,17 @@ private fun LogScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // The slot is always laid out, so showing the indicator does not move the content.
-            // It is also held back briefly and faded, because a refresh that finishes at once
-            // otherwise flashed a line across the screen.
-            var indicatorVisible by remember { mutableStateOf(false) }
-            LaunchedEffect(refreshing) {
-                if (refreshing) {
-                    delay(REFRESH_INDICATOR_DELAY_MILLIS)
-                    indicatorVisible = true
-                } else {
-                    indicatorVisible = false
-                }
-            }
-            val indicatorAlpha by animateFloatAsState(
-                targetValue = if (indicatorVisible) 1f else 0f,
-                animationSpec = tween(200),
-                label = "refreshIndicatorAlpha"
-            )
-            Box(
+            RecordingStatus(recording = recording, busy = togglingRecording)
+
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = onRefresh,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(REFRESH_INDICATOR_HEIGHT)
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.Center
+                    .weight(1f)
             ) {
-                if (indicatorAlpha > 0f) {
-                    WavyProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .alpha(indicatorAlpha)
-                    )
-                }
-            }
-
-            if (logs.isEmpty()) {
-                val message = buildString {
-                    append(stringResource(R.string.log_start_recording))
-                    if (blockedRequestsIgnored) {
-                        append(stringResource(R.string.log_blocked_requests_ignored))
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    ExpressiveSection {
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Start,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(20.dp)
-                        )
-                    }
-                }
-            } else {
+                // Everything lives in the list, including the placeholders, so the screen can
+                // always be pulled down to refresh.
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
@@ -312,21 +304,209 @@ private fun LogScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    itemsIndexed(
-                        items = logs,
-                        key = { _, entry -> entry.host }
-                    ) { index, entry ->
-                        LogEntryRow(
-                            entry = entry,
-                            shape = if (index % 2 == 0) ExpressiveAsymmetricShape1 else ExpressiveAsymmetricShape2,
-                            onAction = onEntryAction,
-                            onOpenHost = onOpenHost,
-                            onCopyHost = onCopyHost
-                        )
+                    if (logs.isEmpty()) {
+                        item(key = "empty") {
+                            EmptyMessage(
+                                searchQuery = searchQuery,
+                                blockedRequestsIgnored = blockedRequestsIgnored
+                            )
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = logs,
+                            key = { _, entry -> entry.host }
+                        ) { index, entry ->
+                            LogEntryRow(
+                                entry = entry,
+                                shape = if (index % 2 == 0) {
+                                    ExpressiveAsymmetricShape1
+                                } else {
+                                    ExpressiveAsymmetricShape2
+                                },
+                                onAction = onEntryAction,
+                                onOpenHost = onOpenHost,
+                                onCopyHost = onCopyHost,
+                                // Reordering the list slides the rows to their new place rather
+                                // than swapping their content in place.
+                                modifier = Modifier.animateItem()
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchField(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester),
+        singleLine = true,
+        placeholder = { Text(text = stringResource(R.string.log_search_hint)) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        painter = painterResource(R.drawable.baseline_close_24),
+                        contentDescription = stringResource(R.string.log_search_clear_description)
+                    )
+                }
+            }
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
+    )
+}
+
+/**
+ * The recording state, in a strip that is always laid out so showing it moves nothing.
+ * Starting a capture takes a moment, and without this the screen looked inert until it finished.
+ */
+@Composable
+private fun RecordingStatus(recording: Boolean, busy: Boolean) {
+    val text = when {
+        busy && recording -> stringResource(R.string.log_recording_stopping)
+        busy -> stringResource(R.string.log_recording_starting)
+        recording -> stringResource(R.string.log_recording_active)
+        else -> null
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (text == null) 0f else 1f,
+        animationSpec = tween(200),
+        label = "recordingStatusAlpha"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(RECORDING_STATUS_HEIGHT)
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (alpha > 0f && text != null) {
+            Row(
+                modifier = Modifier.alpha(alpha),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The record and pause control.
+ *
+ * Its icon is swapped with a spinner while the capture is being started or stopped: that goes
+ * through a privileged shell and waits for the capture to prove it is alive, so the state cannot
+ * change the instant the control is pressed.
+ */
+@Composable
+private fun RecordingButton(
+    recording: Boolean,
+    busy: Boolean,
+    onClick: () -> Unit
+) {
+    val containerColor by animateColorAsState(
+        targetValue = if (recording) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        },
+        animationSpec = tween(300),
+        label = "recordingButtonContainer"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (recording) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        },
+        animationSpec = tween(300),
+        label = "recordingButtonContent"
+    )
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = containerColor,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.large
+    ) {
+        AnimatedContent(
+            targetState = if (busy) null else recording,
+            transitionSpec = {
+                (fadeIn(tween(150)) + scaleIn(tween(150), initialScale = 0.7f)) togetherWith
+                        (fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.7f))
+            },
+            label = "recordingButtonIcon"
+        ) { state ->
+            if (state == null) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = contentColor
+                )
+            } else {
+                Icon(
+                    painter = painterResource(
+                        if (state) R.drawable.ic_pause_24dp else R.drawable.ic_record_24dp
+                    ),
+                    contentDescription = stringResource(R.string.log_toggle_recording_description),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyMessage(
+    searchQuery: String,
+    blockedRequestsIgnored: Boolean
+) {
+    val message = if (searchQuery.isNotBlank()) {
+        stringResource(R.string.log_search_no_result, searchQuery)
+    } else {
+        buildString {
+            append(stringResource(R.string.log_start_recording))
+            if (blockedRequestsIgnored) {
+                append(stringResource(R.string.log_blocked_requests_ignored))
+            }
+        }
+    }
+    ExpressiveSection {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Start,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(20.dp)
+        )
     }
 }
 
@@ -336,17 +516,18 @@ private fun LogEntryRow(
     shape: Shape,
     onAction: (LogEntry, ListType) -> Unit,
     onOpenHost: (String) -> Unit,
-    onCopyHost: (String) -> Unit
+    onCopyHost: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     ExpressiveSection(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         shape = shape
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             LogActionButton(
@@ -367,12 +548,7 @@ private fun LogEntryRow(
                 activeColor = MaterialTheme.colorScheme.secondary,
                 onClick = { onAction(entry, ListType.REDIRECTED) }
             )
-            Text(
-                text = entry.host,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 8.dp, end = 6.dp)
@@ -380,7 +556,46 @@ private fun LogEntryRow(
                         onClick = { onOpenHost(entry.host) },
                         onLongClick = { onCopyHost(entry.host) }
                     )
-            )
+            ) {
+                Text(
+                    text = entry.host,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val lastSeen = entry.lastSeen
+                if (lastSeen != null) {
+                    Text(
+                        text = rememberFormattedTime(lastSeen),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Format the time a request was last seen the way the system does, showing the date only when it
+ * was not made today.
+ */
+@Composable
+private fun rememberFormattedTime(instant: Instant): String {
+    val context = LocalContext.current
+    val timeFormat = remember(context) { DateFormat.getTimeFormat(context) }
+    val dateFormat = remember(context) { DateFormat.getDateFormat(context) }
+    return remember(instant, timeFormat, dateFormat) {
+        val zone = ZoneId.systemDefault()
+        val date = Date.from(instant)
+        val time = timeFormat.format(date)
+        if (instant.atZone(zone).toLocalDate() == Instant.now().atZone(zone).toLocalDate()) {
+            time
+        } else {
+            dateFormat.format(date) + " " + time
         }
     }
 }
@@ -392,15 +607,16 @@ private fun LogActionButton(
     activeColor: Color = MaterialTheme.colorScheme.primary,
     onClick: () -> Unit
 ) {
+    val tint by animateColorAsState(
+        targetValue = if (active) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(200),
+        label = "logActionTint"
+    )
     IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
         Icon(
             painter = painterResource(iconRes),
             contentDescription = null,
-            tint = if (active) {
-                activeColor
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            tint = tint,
             modifier = Modifier.size(20.dp)
         )
     }
@@ -443,11 +659,6 @@ private fun RedirectIpDialog(
 }
 
 /**
- * The height reserved for the refresh indicator, so showing it does not move the content.
+ * The height reserved for the recording status, so showing it does not move the content.
  */
-private val REFRESH_INDICATOR_HEIGHT = 16.dp
-
-/**
- * How long a refresh must last before its indicator is shown, so a quick one does not flash.
- */
-private const val REFRESH_INDICATOR_DELAY_MILLIS = 300L
+private val RECORDING_STATUS_HEIGHT = 24.dp

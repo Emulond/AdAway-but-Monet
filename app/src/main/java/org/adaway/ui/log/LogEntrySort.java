@@ -1,5 +1,7 @@
 package org.adaway.ui.log;
 
+import androidx.annotation.DrawableRes;
+
 import org.adaway.R;
 
 import java.util.Comparator;
@@ -9,11 +11,16 @@ import java.util.Comparator;
  *
  * @author Bruce BUJON (bruce.bujon(at)gmail(dot)com)
  */
-enum LogEntrySort {
+public enum LogEntrySort {
     ALPHABETICAL {
         @Override
         int getName() {
             return R.string.log_sort_alphabetical;
+        }
+
+        @Override
+        int getIcon() {
+            return R.drawable.baseline_sort_by_alpha_24;
         }
 
         @Override
@@ -25,6 +32,11 @@ enum LogEntrySort {
         @Override
         int getName() {
             return R.string.log_sort_top_level_domain;
+        }
+
+        @Override
+        int getIcon() {
+            return R.drawable.baseline_sort_24;
         }
 
         @Override
@@ -60,6 +72,14 @@ enum LogEntrySort {
      * @return The sort name resource identifier.
      */
     abstract int getName();
+
+    /**
+     * Get the icon standing for the sort in use.
+     *
+     * @return The sort icon resource identifier.
+     */
+    @DrawableRes
+    abstract int getIcon();
 
     /**
      * Get the sort comparator.

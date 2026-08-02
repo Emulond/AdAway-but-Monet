@@ -8,7 +8,11 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.adaway.AdAwayApplication
@@ -33,14 +37,37 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     private val adBlockModel: AdBlockModel = (application as AdAwayApplication).adBlockModel
     private val hostListItemDao: HostListItemDao = AppDatabase.getInstance(application).hostsListItemDao()
     private val hostEntryDao: HostEntryDao = AppDatabase.getInstance(application).hostEntryDao()
-    private var sort = LogEntrySort.TOP_LEVEL_DOMAIN
+    private val _sort = MutableStateFlow(LogEntrySort.TOP_LEVEL_DOMAIN)
+    val sort: StateFlow<LogEntrySort> = _sort
 
     private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
     val logs: StateFlow<List<LogEntry>> = _logs
 
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
+
+    /**
+     * The requests to show: everything recorded, narrowed down to what the search matches.
+     * Filtering runs off the main thread because a long recording holds thousands of requests.
+     */
+    val visibleLogs: StateFlow<List<LogEntry>> = combine(_logs, _searchQuery) { logs, query ->
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) logs else logs.filter { it.host.contains(trimmed, ignoreCase = true) }
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
     private val _recording = MutableStateFlow(false)
     val recording: StateFlow<Boolean> = _recording
 
+    /**
+     * Whether the recording is being started or stopped right now.
+     *
+     * Starting a capture goes through a privileged shell and waits for the capture to prove it is
+     * alive, which takes long enough to look like nothing happened.
+     */
+    private val _togglingRecording = MutableStateFlow(false)
+    val togglingRecording: StateFlow<Boolean> = _togglingRecording
 
     private val _recordingMessage = MutableStateFlow<RecordingMessage?>(null)
     val recordingMessage: StateFlow<RecordingMessage?> = _recordingMessage
@@ -84,15 +111,25 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
         _refreshing.value = false
     }
 
+    fun search(query: String) {
+        _searchQuery.value = query
+    }
+
     fun updateLogs() {
         viewModelScope.launch {
             _refreshing.value = true
             try {
                 val logItems = withContext(Dispatchers.IO) {
-                    adBlockModel.logs
+                    adBlockModel.requests
                         .parallelStream()
-                        .map { log -> LogEntry(log, hostEntryDao.getTypeOfHost(log)) }
-                        .sorted(sort.comparator())
+                        .map { request ->
+                            LogEntry(
+                                request.host,
+                                hostEntryDao.getTypeOfHost(request.host),
+                                request.lastSeen
+                            )
+                        }
+                        .sorted(_sort.value.comparator())
                         .toList()
                 }
                 _logs.value = logItems
@@ -110,7 +147,7 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleSort() {
         sortDnsRequests(
-            if (sort == LogEntrySort.ALPHABETICAL) {
+            if (_sort.value == LogEntrySort.ALPHABETICAL) {
                 LogEntrySort.TOP_LEVEL_DOMAIN
             } else {
                 LogEntrySort.ALPHABETICAL
@@ -119,15 +156,23 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleRecording() {
+        if (_togglingRecording.value) {
+            return
+        }
         viewModelScope.launch {
             val enable = !_recording.value
-            // Report the state the capture actually ended in rather than the requested one, so a
-            // capture that fails to start does not leave the control showing as enabled.
-            _recording.value = withContext(Dispatchers.IO) {
-                adBlockModel.setRecordingLogs(enable)
-                adBlockModel.isRecordingLogs
+            _togglingRecording.value = true
+            try {
+                // Report the state the capture actually ended in rather than the requested one, so
+                // a capture that fails to start does not leave the control showing as enabled.
+                _recording.value = withContext(Dispatchers.IO) {
+                    adBlockModel.setRecordingLogs(enable)
+                    adBlockModel.isRecordingLogs
+                }
+                _recordingMessage.value = buildRecordingMessage()
+            } finally {
+                _togglingRecording.value = false
             }
-            _recordingMessage.value = buildRecordingMessage()
         }
     }
 
@@ -154,17 +199,25 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateLogEntryType(host: String, type: ListType?) {
         _logs.value = _logs.value.map { entry ->
-            if (entry.host == host) LogEntry(host, type) else entry
+            if (entry.host == host) entry.copy(type = type) else entry
         }
     }
 
     private fun sortDnsRequests(sort: LogEntrySort) {
-        this.sort = sort
+        _sort.value = sort
         _logs.value = _logs.value.sortedWith(sort.comparator())
         ExpressiveToast.makeText(
             getApplication(),
             sort.getName(),
             Toast.LENGTH_SHORT
         ).show()
+    }
+
+    private companion object {
+        /**
+         * How long the filtering keeps running after the screen stops listening, so a rotation
+         * does not throw the filtered list away.
+         */
+        const val STOP_TIMEOUT_MILLIS = 5_000L
     }
 }
