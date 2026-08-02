@@ -27,6 +27,7 @@ import android.net.Network;
 import android.os.Build;
 
 import org.adaway.R;
+import org.adaway.helper.PreferenceHelper;
 
 import com.topjohnwu.superuser.Shell;
 
@@ -59,7 +60,7 @@ class TcpdumpUtils {
     /**
      * The capture program some systems provide, used when the bundled one does not run.
      */
-    private static final String SYSTEM_TCPDUMP = "tcpdump";
+    private static final String SYSTEM_TCPDUMP = "/system/bin/tcpdump";
     /**
      * The capture arguments. Kept in one place because the running capture is recognised by them.
      */
@@ -128,6 +129,7 @@ class TcpdumpUtils {
         for (String candidate : captureCandidates(context)) {
             if (startCapture(context, candidate, file)) {
                 Timber.i("Capturing DNS requests with %s.", candidate);
+                PreferenceHelper.setLastWorkingCapture(context, candidate);
                 return null;
             }
             describeFailedAttempt(context, candidate, file, attempts);
@@ -144,20 +146,32 @@ class TcpdumpUtils {
      */
     private static List<String> captureCandidates(Context context) {
         List<String> candidates = new ArrayList<>();
+        // Whatever worked last time is tried first, so a device that needs a fallback does not run
+        // through the failing candidates on every start.
+        String remembered = PreferenceHelper.getLastWorkingCapture(context);
+        if (remembered != null) {
+            candidates.add(remembered);
+        }
         String bundled = new File(
                 context.getApplicationInfo().nativeLibraryDir,
                 ShellUtils.getExecutableName(TCPDUMP_EXECUTABLE)).getAbsolutePath();
         if (new File(bundled).exists()) {
-            candidates.add(bundled);
+            addCandidate(candidates, bundled);
             // Keep the same file name so a running capture is still recognised.
             String copy = SHELL_TEMPORARY_DIRECTORY + File.separator
                     + ShellUtils.getExecutableName(TCPDUMP_EXECUTABLE);
             if (Shell.cmd("cp -f " + bundled + " " + copy + " && chmod 700 " + copy).exec().isSuccess()) {
-                candidates.add(copy);
+                addCandidate(candidates, copy);
             }
         }
-        candidates.add(SYSTEM_TCPDUMP);
+        addCandidate(candidates, SYSTEM_TCPDUMP);
         return candidates;
+    }
+
+    private static void addCandidate(List<String> candidates, String candidate) {
+        if (!candidates.contains(candidate)) {
+            candidates.add(candidate);
+        }
     }
 
     /**
@@ -167,7 +181,7 @@ class TcpdumpUtils {
      * tells whether the program actually ran.
      */
     private static boolean startCapture(Context context, String executable, File logFile) {
-        String command = "LD_LIBRARY_PATH=" + context.getApplicationInfo().nativeLibraryDir + " "
+        String command = libraryPathPrefix(context, executable)
                 + executable + " " + CAPTURE_ARGUMENTS + " >> " + logFile + " 2>&1 &";
         Shell.cmd(command).exec();
         try {
@@ -188,8 +202,7 @@ class TcpdumpUtils {
             attempts.append("; ");
         }
         Shell.Result probe = Shell.cmd(
-                "LD_LIBRARY_PATH=" + context.getApplicationInfo().nativeLibraryDir + " "
-                        + executable + " --version").exec();
+                libraryPathPrefix(context, executable) + executable + " --version").exec();
         attempts.append(executable).append(" -> ").append(describeExit(probe.getCode()));
         String error = ShellUtils.mergeAllLines(probe.getErr()).trim();
         if (!error.isEmpty()) {
@@ -200,6 +213,19 @@ class TcpdumpUtils {
                 attempts.append(": ").append(output);
             }
         }
+    }
+
+    /**
+     * The library path a capture program needs.
+     *
+     * Only the programs shipped with the application link against its libraries. Pointing a system
+     * program at them would have it load libraries it was not built against.
+     */
+    private static String libraryPathPrefix(Context context, String executable) {
+        if (SYSTEM_TCPDUMP.equals(executable)) {
+            return "";
+        }
+        return "LD_LIBRARY_PATH=" + context.getApplicationInfo().nativeLibraryDir + " ";
     }
 
     /**

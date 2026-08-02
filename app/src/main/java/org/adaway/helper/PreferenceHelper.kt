@@ -328,4 +328,25 @@ object PreferenceHelper {
      * The interval used before it could be configured.
      */
     const val DEFAULT_UPDATE_INTERVAL_HOURS = 6
+
+    /**
+     * Get the capture program that last started a DNS recording successfully.
+     * Tried first so a device whose bundled program does not run is not made to fail through the
+     * whole list on every start.
+     */
+    @JvmStatic
+    fun getLastWorkingCapture(context: Context): String? {
+        return context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_LAST_WORKING_CAPTURE, null)
+    }
+
+    @JvmStatic
+    fun setLastWorkingCapture(context: Context, executable: String) {
+        context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_LAST_WORKING_CAPTURE, executable)
+            .apply()
+    }
+
+    private const val PREF_LAST_WORKING_CAPTURE = "lastWorkingCapture"
 }
