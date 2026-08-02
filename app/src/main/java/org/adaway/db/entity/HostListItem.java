@@ -20,7 +20,10 @@ import static androidx.room.ForeignKey.CASCADE;
         tableName = "hosts_lists",
         indices = {
                 @Index(value = "host"),
-                @Index(value = "source_id")
+                @Index(value = "source_id"),
+                // Serves the list screen: filtering on type and ordering by host in one index
+                // avoids sorting and grouping the whole table before the first page is shown.
+                @Index(value = {"type", "host"})
         },
         foreignKeys = @ForeignKey(
                 entity = HostsSource.class,

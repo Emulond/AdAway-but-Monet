@@ -130,4 +130,14 @@ final class Migrations {
             database.execSQL("CREATE TABLE IF NOT EXISTS `metadata` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))");
         }
     };
+
+    /**
+     * Migration script from v8 to v9.
+     */
+    static final Migration MIGRATION_8_9 = new Migration(8, 9) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_hosts_lists_type_host` ON `hosts_lists` (`type`, `host`)");
+        }
+    };
 }
