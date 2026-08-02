@@ -1,6 +1,7 @@
 package org.adaway.model.source;
 
 import static android.content.Context.CONNECTIVITY_SERVICE;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
 import static android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED;
 import static org.adaway.model.error.HostError.DOWNLOAD_FAILED;
 import static org.adaway.model.error.HostError.NO_CONNECTION;
@@ -14,7 +15,8 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 
 import androidx.annotation.NonNull;
@@ -247,8 +249,14 @@ public class SourceModel {
         if (connectivityManager == null) {
             return false;
         }
-        NetworkInfo netInfo = connectivityManager.getActiveNetworkInfo();
-        return netInfo == null || !netInfo.isConnectedOrConnecting();
+        Network network = connectivityManager.getActiveNetwork();
+        if (network == null) {
+            return true;
+        }
+        NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
+        // Only the presence of an internet capable network is required. Demanding a validated one
+        // reports a captive portal, or a network still being validated, as no connection at all.
+        return capabilities == null || !capabilities.hasCapability(NET_CAPABILITY_INTERNET);
     }
 
     /**
