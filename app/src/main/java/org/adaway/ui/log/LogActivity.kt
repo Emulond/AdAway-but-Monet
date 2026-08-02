@@ -2,6 +2,10 @@ package org.adaway.ui.log
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +25,12 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import org.adaway.ui.compose.WavyProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,17 +49,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 import org.adaway.R
 import org.adaway.db.entity.ListType
 import org.adaway.ui.adblocking.ApplyConfigurationSnackbar
+import org.adaway.ui.compose.ExpressiveAsymmetricShape1
+import org.adaway.ui.compose.ExpressiveAsymmetricShape2
 import org.adaway.ui.compose.ExpressiveScaffold
 import org.adaway.ui.compose.ExpressiveSection
 import org.adaway.ui.compose.ExpressiveTopBar
-import org.adaway.ui.compose.ExpressiveAsymmetricShape1
-import org.adaway.ui.compose.ExpressiveAsymmetricShape2
+import org.adaway.ui.compose.WavyProgressIndicator
 import org.adaway.ui.compose.safeCombinedClickable
 import org.adaway.util.Clipboard
 import org.adaway.util.RegexUtils
@@ -240,8 +246,18 @@ private fun LogScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // The slot is always laid out. Adding the indicator to the flow only while refreshing
-            // pushed the content below it down and back up again on every refresh.
+            // The slot is always laid out, so showing the indicator does not move the content.
+            // It is also held back briefly and faded, because a refresh that finishes at once
+            // otherwise flashed a line across the screen.
+            var indicatorVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(refreshing) {
+                if (refreshing) {
+                    delay(REFRESH_INDICATOR_DELAY_MILLIS)
+                    indicatorVisible = true
+                } else {
+                    indicatorVisible = false
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -249,7 +265,11 @@ private fun LogScreen(
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (refreshing) {
+                AnimatedVisibility(
+                    visible = indicatorVisible,
+                    enter = fadeIn(animationSpec = tween(200)),
+                    exit = fadeOut(animationSpec = tween(200))
+                ) {
                     WavyProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
@@ -422,3 +442,8 @@ private fun RedirectIpDialog(
  * The height reserved for the refresh indicator, so showing it does not move the content.
  */
 private val REFRESH_INDICATOR_HEIGHT = 16.dp
+
+/**
+ * How long a refresh must last before its indicator is shown, so a quick one does not flash.
+ */
+private const val REFRESH_INDICATOR_DELAY_MILLIS = 300L
