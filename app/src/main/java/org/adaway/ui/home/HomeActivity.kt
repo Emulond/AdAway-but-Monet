@@ -673,8 +673,11 @@ private fun ShrinkToFitText(
         modifier = modifier,
         onTextLayout = { result ->
             // Step down until it fits, or until shrinking further would stop being legible.
+            // TextUnit carries a compareTo operator but is not Comparable, so the floor is
+            // applied with a plain comparison rather than coerceAtLeast.
             if (result.didOverflowWidth && fontSize > MIN_METRIC_FONT_SIZE) {
-                fontSize = (fontSize * 0.9f).coerceAtLeast(MIN_METRIC_FONT_SIZE)
+                val reduced = fontSize * 0.9f
+                fontSize = if (reduced < MIN_METRIC_FONT_SIZE) MIN_METRIC_FONT_SIZE else reduced
             }
         }
     )
