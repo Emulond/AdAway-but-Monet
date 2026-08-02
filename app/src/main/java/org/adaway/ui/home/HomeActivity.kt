@@ -18,6 +18,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -192,12 +193,15 @@ class HomeActivity : ComponentActivity() {
 private data class HomeScreenState(
     val versionName: String = "",
     val updateAvailable: Boolean = false,
-    val blockedHostCount: Int = 0,
-    val allowedHostCount: Int = 0,
-    val redirectHostCount: Int = 0,
+    // Null while the cached value has not been read yet, which is shown as loading rather than
+    // as a count of zero.
+    val blockedHostCount: Int? = null,
+    val allowedHostCount: Int? = null,
+    val redirectHostCount: Int? = null,
     val upToDateSourceCount: Int = 0,
     val outdatedSourceCount: Int = 0,
     val pending: Boolean = false,
+    val allSourcesUpToDate: Boolean = false,
     val stateText: String = "",
     val adBlocked: Boolean = false,
     val drawerVisible: Boolean = false
@@ -227,6 +231,7 @@ internal fun HomeRoute(
     val redirectHostCount by viewModel.redirectHostCount.collectAsStateWithLifecycle()
     val upToDateSourceCount by viewModel.upToDateSourceCount.collectAsStateWithLifecycle()
     val outdatedSourceCount by viewModel.outdatedSourceCount.collectAsStateWithLifecycle()
+    val allSourcesUpToDate by viewModel.allSourcesUpToDate.collectAsStateWithLifecycle()
     val pending by viewModel.pending.collectAsStateWithLifecycle()
     val stateText by viewModel.state.collectAsStateWithLifecycle()
     var drawerVisible by rememberSaveable { mutableStateOf(false) }
@@ -243,6 +248,7 @@ internal fun HomeRoute(
         redirectHostCount,
         upToDateSourceCount,
         outdatedSourceCount,
+        allSourcesUpToDate,
         pending,
         stateText,
         adBlocked,
@@ -256,6 +262,7 @@ internal fun HomeRoute(
             redirectHostCount = redirectHostCount,
             upToDateSourceCount = upToDateSourceCount,
             outdatedSourceCount = outdatedSourceCount,
+            allSourcesUpToDate = allSourcesUpToDate,
             pending = pending,
             stateText = stateText.orEmpty(),
             adBlocked = adBlocked,
@@ -690,7 +697,7 @@ private fun HomeMetricCard(
     modifier: Modifier = Modifier,
     iconRes: Int,
     iconTint: Color,
-    count: Int,
+    count: Int?,
     @StringRes labelRes: Int,
     shape: Shape = MaterialTheme.shapes.extraLarge,
     onClick: () -> Unit
@@ -722,12 +729,23 @@ private fun HomeMetricCard(
                 },
                 label = "countTransition"
             ) { targetCount ->
-                ShrinkToFitText(
-                    text = targetCount.toString(),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(top = 12.dp)
-                )
+                if (targetCount == null) {
+                    // The count is not known yet. Showing a zero would read as a real value.
+                    WavyProgressIndicator(
+                        modifier = Modifier
+                            .padding(top = 20.dp, bottom = 8.dp)
+                            .width(48.dp),
+                        color = iconTint,
+                        trackColor = iconTint.copy(alpha = 0.2f)
+                    )
+                } else {
+                    ShrinkToFitText(
+                        text = targetCount.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
             }
             Text(
                 text = stringResource(labelRes),
@@ -777,25 +795,57 @@ private fun SourceStatusSection(
                 Spacer(modifier = Modifier.width(20.dp))
                 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(
-                            R.string.up_to_date_source_ratio_label,
-                            state.upToDateSourceCount,
-                            state.totalSourceCount
-                        ),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (state.outdatedSourceCount > 0) {
-                        Text(
-                            text = pluralStringResource(
-                                R.plurals.outdated_source_label,
-                                state.outdatedSourceCount,
-                                state.outdatedSourceCount
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                    // A finished check that found nothing is confirmed for a moment, then the
+                    // summary returns to its usual content.
+                    AnimatedContent(
+                        targetState = state.allSourcesUpToDate,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(400)) +
+                                    slideInVertically(animationSpec = tween(400)) { it / 3 })
+                                .togetherWith(fadeOut(animationSpec = tween(300)))
+                        },
+                        label = "sourceSummaryTransition"
+                    ) { confirming ->
+                        if (confirming) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.baseline_check_24),
+                                    contentDescription = null,
+                                    tint = colorResource(R.color.allowed),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.all_sources_up_to_date),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorResource(R.color.allowed)
+                                )
+                            }
+                        } else {
+                            Column {
+                                Text(
+                                    text = stringResource(
+                                        R.string.up_to_date_source_ratio_label,
+                                        state.upToDateSourceCount,
+                                        state.totalSourceCount
+                                    ),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (state.outdatedSourceCount > 0) {
+                                    Text(
+                                        text = pluralStringResource(
+                                            R.plurals.outdated_source_label,
+                                            state.outdatedSourceCount,
+                                            state.outdatedSourceCount
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 

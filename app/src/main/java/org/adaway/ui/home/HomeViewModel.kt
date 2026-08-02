@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -110,16 +111,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * The host counters, read from their cached values so the screen shows them at once rather
      * than counting distinct hosts across millions of rows on every display.
      */
-    private fun cachedHostCount(type: ListType): StateFlow<Int> = metadataDao.observeHostCount(type)
+    private fun cachedHostCount(type: ListType): StateFlow<Int?> = metadataDao.observeHostCount(type)
         .asFlow()
-        .map { it?.toIntOrNull() ?: 0 }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), 0)
+        .map { it?.toIntOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), null)
 
-    val blockedHostCount: StateFlow<Int> = cachedHostCount(ListType.BLOCKED)
+    val blockedHostCount: StateFlow<Int?> = cachedHostCount(ListType.BLOCKED)
 
-    val allowedHostCount: StateFlow<Int> = cachedHostCount(ListType.ALLOWED)
+    val allowedHostCount: StateFlow<Int?> = cachedHostCount(ListType.ALLOWED)
 
-    val redirectHostCount: StateFlow<Int> = cachedHostCount(ListType.REDIRECTED)
+    val redirectHostCount: StateFlow<Int?> = cachedHostCount(ListType.REDIRECTED)
+
+    /**
+     * Set while the confirmation that every source is up to date is being shown.
+     * Cleared on its own so the summary returns to its usual content.
+     */
+    private val _allSourcesUpToDate = MutableStateFlow(false)
+    val allSourcesUpToDate: StateFlow<Boolean> = _allSourcesUpToDate
 
     /**
      * The enabled sources, classified into up to date and outdated.
@@ -139,6 +147,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun HostsSource.isUpToDate(): Boolean =
         SourceUpdateStatus.isUpToDate(localModificationDate, onlineModificationDate)
+
+    /**
+     * Show that every source is up to date, then return the summary to its usual content.
+     */
+    private fun confirmAllSourcesUpToDate() {
+        viewModelScope.launch {
+            _allSourcesUpToDate.value = true
+            delay(UP_TO_DATE_CONFIRMATION_MILLIS)
+            _allSourcesUpToDate.value = false
+        }
+    }
 
     /**
      * Recompute the cached host counters off the main thread.
@@ -201,6 +220,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     if (!hasUpdate) {
+                        confirmAllSourcesUpToDate()
                         return@withContext
                     }
                     sourceModel.retrieveHostsSources { completed, total, _ ->
@@ -288,5 +308,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val FLOW_STOP_TIMEOUT_MILLIS = 5_000L
+
+        /**
+         * How long the up to date confirmation stays on screen.
+         */
+        private const val UP_TO_DATE_CONFIRMATION_MILLIS = 2_500L
     }
 }
