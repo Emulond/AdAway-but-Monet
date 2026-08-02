@@ -24,8 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,7 +37,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,17 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,6 +65,7 @@ import org.adaway.ui.adblocking.ApplyConfigurationSnackbar
 import org.adaway.ui.compose.ExpressiveAsymmetricShape1
 import org.adaway.ui.compose.ExpressiveAsymmetricShape2
 import org.adaway.ui.compose.ExpressiveScaffold
+import org.adaway.ui.compose.ExpressiveSearchField
 import org.adaway.ui.compose.ExpressiveSection
 import org.adaway.ui.compose.ExpressiveTopBar
 import org.adaway.ui.compose.safeCombinedClickable
@@ -228,7 +222,15 @@ private fun LogScreen(
                 title = stringResource(R.string.shortcut_dns_requests),
                 onNavigateBack = if (searching) closeSearch else onNavigateBack,
                 titleContent = if (searching) {
-                    { SearchField(query = searchQuery, onQueryChange = onSearch) }
+                    {
+                        ExpressiveSearchField(
+                            query = searchQuery,
+                            onQueryChange = onSearch,
+                            placeholder = stringResource(R.string.log_search_hint),
+                            clearContentDescription =
+                                stringResource(R.string.log_search_clear_description)
+                        )
+                    }
                 } else {
                     null
                 },
@@ -336,39 +338,6 @@ private fun LogScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit
-) {
-    val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester),
-        singleLine = true,
-        placeholder = { Text(text = stringResource(R.string.log_search_hint)) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        painter = painterResource(R.drawable.baseline_close_24),
-                        contentDescription = stringResource(R.string.log_search_clear_description)
-                    )
-                }
-            }
-        },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
-    )
 }
 
 /**

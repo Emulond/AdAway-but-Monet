@@ -118,11 +118,6 @@ class ListsViewModel(application: Application) : AndroidViewModel(application) {
         setFilter(ListsFilter(currentFilter.sourcesIncluded, ""))
     }
 
-    fun toggleSources() {
-        val currentFilter = getFilter()
-        setFilter(ListsFilter(!currentFilter.sourcesIncluded, currentFilter.query))
-    }
-
     private fun getFilter(): ListsFilter = filter.value
 
     private fun setFilter(filter: ListsFilter) {

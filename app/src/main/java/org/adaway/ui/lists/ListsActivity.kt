@@ -66,6 +66,7 @@ import org.adaway.ui.compose.ExpressiveAsymmetricShape2
 import org.adaway.ui.compose.ExpressiveFloatingBottomBar
 import org.adaway.ui.compose.ExpressiveScaffold
 import org.adaway.ui.compose.ExpressiveSection
+import org.adaway.ui.compose.ExpressiveSearchField
 import org.adaway.ui.compose.ExpressiveTopBar
 import org.adaway.ui.compose.safeCombinedClickable
 import org.adaway.ui.navigation.ListsRouteDefaults
@@ -94,7 +95,6 @@ internal fun ListsRoute(
             viewModel.clearSearch()
             onNavigateBack()
         },
-        onToggleSources = viewModel::toggleSources,
         onSearchQueryChanged = { query ->
             if (query.isNullOrBlank()) {
                 viewModel.clearSearch()
@@ -115,7 +115,6 @@ private fun ListsScreen(
     initialTab: Int,
     viewModel: ListsViewModel,
     onNavigateBack: () -> Unit,
-    onToggleSources: () -> Unit,
     onSearchQueryChanged: (String?) -> Unit,
     onTabChanged: (Int) -> Unit,
     onToggleItemEnabled: (HostListItem) -> Unit,
@@ -142,37 +141,53 @@ private fun ListsScreen(
         onTabChanged(pagerState.currentPage)
     }
 
-    BackHandler(enabled = searchVisible) {
+    val closeSearch = {
         searchVisible = false
         searchQuery = ""
         onSearchQueryChanged(null)
+    }
+
+    BackHandler(enabled = searchVisible) {
+        closeSearch()
     }
 
     ExpressiveScaffold(
         topBar = {
             ExpressiveTopBar(
                 title = stringResource(R.string.lists_title),
-                onNavigateBack = onNavigateBack,
-                actions = {
-                    IconButton(
-                        onClick = {
-                            searchVisible = !searchVisible
-                            if (!searchVisible) {
-                                searchQuery = ""
-                                onSearchQueryChanged(null)
-                            }
-                        }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.baseline_search_24),
-                            contentDescription = stringResource(R.string.lists_menu_filter)
+                onNavigateBack = if (searchVisible) closeSearch else onNavigateBack,
+                titleContent = if (searchVisible) {
+                    {
+                        ExpressiveSearchField(
+                            query = searchQuery,
+                            onQueryChange = { value ->
+                                searchQuery = value
+                                onSearchQueryChanged(value.ifBlank { null })
+                            },
+                            placeholder = stringResource(R.string.lists_menu_filter_hint),
+                            clearContentDescription =
+                                stringResource(R.string.lists_search_clear_description)
                         )
                     }
-                    IconButton(onClick = onToggleSources) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_collections_bookmark_24dp),
-                            contentDescription = stringResource(R.string.lists_menu_toggle_sources)
-                        )
+                } else {
+                    null
+                },
+                actions = {
+                    if (searchVisible) {
+                        IconButton(onClick = closeSearch) {
+                            Icon(
+                                painter = painterResource(R.drawable.baseline_close_24),
+                                contentDescription =
+                                    stringResource(R.string.lists_search_close_description)
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = { searchVisible = true }) {
+                            Icon(
+                                painter = painterResource(R.drawable.baseline_search_24),
+                                contentDescription = stringResource(R.string.lists_menu_filter)
+                            )
+                        }
                     }
                 }
             )
@@ -209,43 +224,6 @@ private fun ListsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (searchVisible) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { value ->
-                        searchQuery = value
-                        onSearchQueryChanged(value.ifBlank { null })
-                    },
-                    placeholder = { Text(stringResource(R.string.lists_menu_filter_hint)) },
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.baseline_search_24),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = {
-                                searchQuery = ""
-                                onSearchQueryChanged(null)
-                            }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.baseline_clear_all_24),
-                                    contentDescription = "Clear",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = CircleShape
-                )
-            }
-
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize()

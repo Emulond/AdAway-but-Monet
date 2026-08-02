@@ -10,7 +10,10 @@
     <!-- Menu -->
     <string name="lists_menu_filter">Filter hosts</string>
     <string name="lists_menu_filter_hint">Search hostname…</string>
+    <!-- Kept for the translations that still carry it, no longer shown anywhere. -->
     <string name="lists_menu_toggle_sources">Toggle sources</string>
+    <string name="lists_search_clear_description">Clear the search</string>
+    <string name="lists_search_close_description">Close the search</string>
     <!-- Edition dialog -->
     <string name="list_add_dialog_black">Add host to blacklist</string>
     <string name="list_add_dialog_white">Add host to whitelist</string>
