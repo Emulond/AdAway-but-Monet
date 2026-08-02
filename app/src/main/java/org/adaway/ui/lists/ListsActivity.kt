@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -363,6 +364,24 @@ private fun HostsListPage(
                 contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                item(key = "loadedCount") {
+                    // Without placeholders the list length is unknown until the end is reached, so
+                    // report what has been loaded rather than leaving the screen silent.
+                    Text(
+                        text = if (pagingItems.loadState.append.endOfPaginationReached) {
+                            pluralStringResource(
+                                R.plurals.hosts_list_loaded_all,
+                                pagingItems.itemCount,
+                                pagingItems.itemCount
+                            )
+                        } else {
+                            stringResource(R.string.hosts_list_loaded_so_far, pagingItems.itemCount)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
                 items(
                     count = pagingItems.itemCount,
                     key = { index ->

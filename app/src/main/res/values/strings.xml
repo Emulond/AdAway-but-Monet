@@ -271,4 +271,9 @@
     <string name="dns_recording_error_no_process">no matching process</string>
     <string name="dns_recording_warning_title">DNS recording started, but names will be hidden</string>
     <string name="dns_recording_warning_private_dns">Private DNS is enabled (%1$s), so DNS requests leave this device encrypted. The capture can see that requests happen but cannot read the host names. Turn Private DNS off in the Android network settings to record them.</string>
+    <string name="hosts_list_loaded_so_far">%1$d loaded so far…</string>
+    <plurals name="hosts_list_loaded_all">
+        <item quantity="one">%1$d host</item>
+        <item quantity="other">%1$d hosts</item>
+    </plurals>
 </resources>

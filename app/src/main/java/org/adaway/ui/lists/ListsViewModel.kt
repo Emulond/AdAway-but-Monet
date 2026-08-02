@@ -30,7 +30,16 @@ import kotlinx.coroutines.launch
 class ListsViewModel(application: Application) : AndroidViewModel(application) {
     private val hostListItemDao: HostListItemDao = AppDatabase.getInstance(application).hostsListItemDao()
     private val filter = MutableStateFlow(ALL)
-    private val pagingConfig = PagingConfig(50, 150, true)
+    /**
+     * Placeholders are disabled deliberately. Room counts the whole result set on every load to
+     * size them, and counting a grouped query over millions of rows had to finish before the first
+     * page could be shown. Without them the first page is read directly.
+     */
+    private val pagingConfig = PagingConfig(
+        pageSize = 50,
+        initialLoadSize = 150,
+        enablePlaceholders = false
+    )
 
     val blockedListItems: Flow<PagingData<HostListItem>> = filter.flatMapLatest { currentFilter ->
         Pager(pagingConfig) {
