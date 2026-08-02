@@ -41,6 +41,31 @@ public final class ShellUtils {
         return String.join("\n", lines);
     }
 
+    /**
+     * Tell whether any process matches a command line pattern.
+     *
+     * @param pattern An extended regular expression matched against the whole command line. It
+     * must not match the shell command carrying it, see {@link #selfExcludingPattern(String)}.
+     */
+    public static boolean isProcessRunning(String pattern) {
+        Shell.Result result = Shell.cmd("pgrep -f " + escapedString(pattern)).exec();
+        if (result.getCode() == COMMAND_NOT_FOUND) {
+            return Shell.cmd("ps -A -o ARGS | grep " + escapedString(pattern)).exec().isSuccess();
+        }
+        return result.isSuccess();
+    }
+
+    /**
+     * Kill every process matching a command line pattern.
+     */
+    public static void killProcesses(String pattern) {
+        Shell.Result result = Shell.cmd("pkill -f " + escapedString(pattern)).exec();
+        if (result.getCode() == COMMAND_NOT_FOUND) {
+            Shell.cmd("ps -A -o PID,ARGS | grep " + escapedString(pattern)
+                    + " | while read pid rest; do kill \"$pid\"; done").exec();
+        }
+    }
+
     public static boolean isBundledExecutableRunning(String executable) {
         String name = getExecutableName(executable);
         // Match on the full command line: bundled executable names are longer than the kernel
