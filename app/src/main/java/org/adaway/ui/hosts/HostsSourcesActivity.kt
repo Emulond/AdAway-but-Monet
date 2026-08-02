@@ -34,7 +34,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.flow.drop
 import org.adaway.R
 import org.adaway.db.entity.HostsSource
 import org.adaway.ui.adblocking.ApplyConfigurationSnackbar
@@ -61,10 +60,8 @@ internal fun HostsSourcesRoute(
 
     LaunchedEffect(viewModel, rootView) {
         val applySnackbar = ApplyConfigurationSnackbar(rootView, true, true)
-        viewModel.hostsSources.drop(1).collect { sourceList ->
-            if (sourceList.isNotEmpty()) {
-                applySnackbar.notifyUpdateAvailable()
-            }
+        viewModel.sourcesChanged.collect {
+            applySnackbar.notifyUpdateAvailable()
         }
     }
 
