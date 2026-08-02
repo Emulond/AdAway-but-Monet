@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -239,12 +240,18 @@ private fun LogScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (refreshing) {
-                WavyProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                )
+            // The slot is always laid out. Adding the indicator to the flow only while refreshing
+            // pushed the content below it down and back up again on every refresh.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(REFRESH_INDICATOR_HEIGHT)
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (refreshing) {
+                    WavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
             }
 
             if (logs.isEmpty()) {
@@ -410,3 +417,8 @@ private fun RedirectIpDialog(
         }
     )
 }
+
+/**
+ * The height reserved for the refresh indicator, so showing it does not move the content.
+ */
+private val REFRESH_INDICATOR_HEIGHT = 16.dp
