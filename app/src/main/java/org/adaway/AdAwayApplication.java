@@ -8,6 +8,8 @@ import org.adaway.helper.ProgressNotifications;
 import org.adaway.model.adblocking.AdBlockMethod;
 import org.adaway.model.adblocking.AdBlockModel;
 import org.adaway.model.source.SourceModel;
+import org.adaway.model.source.SourceUpdateService;
+import org.adaway.model.update.ApkUpdateService;
 import org.adaway.model.update.UpdateModel;
 import org.adaway.util.log.ApplicationLog;
 
@@ -41,9 +43,10 @@ public class AdAwayApplication extends Application {
         // Clears progress notifications left by a previous process and follows the
         // application state so they are only shown while it is not visible.
         ProgressNotifications.init(this);
-        // Create models
-        this.sourceModel = new SourceModel(this);
-        this.updateModel = new UpdateModel(this);
+        // Schedule the background work. Done here rather than as a side effect of building a
+        // model, so the models can be built only when something actually needs them.
+        SourceUpdateService.syncPreferences(this);
+        ApkUpdateService.syncPreferences(this);
     }
 
     /**
@@ -51,7 +54,10 @@ public class AdAwayApplication extends Application {
      *
      * @return The common source model for the whole application.
      */
-    public SourceModel getSourceModel() {
+    public synchronized SourceModel getSourceModel() {
+        if (this.sourceModel == null) {
+            this.sourceModel = new SourceModel(this);
+        }
         return this.sourceModel;
     }
 
@@ -89,7 +95,10 @@ public class AdAwayApplication extends Application {
      *
      * @return Teh common update model for the whole application.
      */
-    public UpdateModel getUpdateModel() {
+    public synchronized UpdateModel getUpdateModel() {
+        if (this.updateModel == null) {
+            this.updateModel = new UpdateModel(this);
+        }
         return this.updateModel;
     }
 }

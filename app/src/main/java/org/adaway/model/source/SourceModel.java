@@ -146,7 +146,6 @@ public class SourceModel {
         this.state = new MutableLiveData<>("");
         this.updateAvailable = new MutableLiveData<>();
         this.updateAvailable.setValue(false);
-        SourceUpdateService.syncPreferences(context);
     }
 
     /**

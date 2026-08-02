@@ -10,6 +10,8 @@ import android.content.Context;
 import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+
+import androidx.core.content.pm.PackageInfoCompat;
 import android.net.Uri;
 
 import androidx.lifecycle.LiveData;
@@ -52,7 +54,6 @@ public class UpdateModel {
         this.versionInfo = VersionInfo.get(context);
         this.manifest = new MutableLiveData<>();
         this.client = buildHttpClient();
-        ApkUpdateService.syncPreferences(context);
     }
 
     /**
@@ -190,7 +191,9 @@ public class UpdateModel {
             try {
                 PackageInfo packageInfo = context.getPackageManager()
                         .getPackageInfo(context.getPackageName(), 0);
-                return new VersionInfo(packageInfo.versionCode, packageInfo.versionName);
+                return new VersionInfo(
+                        (int) PackageInfoCompat.getLongVersionCode(packageInfo),
+                        packageInfo.versionName);
             } catch (PackageManager.NameNotFoundException e) {
                 return new VersionInfo(0, "development");
             }
