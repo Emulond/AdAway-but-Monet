@@ -419,7 +419,8 @@ public class SourceModel {
                         Timber.w("Hosts source type  is not supported.");
                 }
                 // Update local and online modification dates to now
-                localModificationDate = onlineModificationDate.isAfter(now) ? onlineModificationDate : now;
+                ZonedDateTime localModificationDate =
+                        onlineModificationDate.isAfter(now) ? onlineModificationDate : now;
                 this.hostsSourceDao.updateModificationDates(sourceId, localModificationDate, onlineModificationDate);
                 // Update size
                 this.hostsSourceDao.updateSize(sourceId);
