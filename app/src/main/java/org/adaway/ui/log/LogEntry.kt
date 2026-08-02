@@ -12,7 +12,7 @@ import java.time.Instant
  * time. Nothing identifies the application behind a request: the capture reads packets off the
  * network, and the system resolver makes the lookup on every application's behalf.
  */
-data class LogEntry(
+data class LogEntry @JvmOverloads constructor(
     val host: String,
     var type: ListType? = null,
     val lastSeen: Instant? = null
