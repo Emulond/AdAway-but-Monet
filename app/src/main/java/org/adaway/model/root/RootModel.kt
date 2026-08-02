@@ -17,6 +17,7 @@ import org.adaway.helper.PreferenceHelper
 import org.adaway.model.adblocking.AdBlockMethod
 import org.adaway.model.adblocking.AdBlockMethod.ROOT
 import org.adaway.model.adblocking.AdBlockModel
+import org.adaway.model.adblocking.DnsRequest
 import org.adaway.model.error.HostError.COPY_FAIL
 import org.adaway.model.error.HostError.NOT_ENOUGH_SPACE
 import org.adaway.model.error.HostError.PRIVATE_FILE_FAILED
@@ -129,7 +130,7 @@ class RootModel(context: Context) : AdBlockModel(context) {
         }
     }
 
-    override fun getLogs(): List<String> = TcpdumpUtils.getLogs(this.context)
+    override fun getRequests(): List<DnsRequest> = TcpdumpUtils.getRequests(this.context)
 
     override fun clearLogs() {
         TcpdumpUtils.clearLogFile(this.context)

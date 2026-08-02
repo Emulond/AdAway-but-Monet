@@ -28,6 +28,7 @@ import android.os.Build;
 
 import org.adaway.R;
 import org.adaway.helper.PreferenceHelper;
+import org.adaway.model.adblocking.DnsRequest;
 
 import com.topjohnwu.superuser.Shell;
 
@@ -35,11 +36,18 @@ import com.topjohnwu.superuser.Shell;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -62,10 +70,17 @@ class TcpdumpUtils {
      */
     private static final String SYSTEM_TCPDUMP = "/system/bin/tcpdump";
     /**
-     * The capture arguments. Kept in one place because the running capture is recognised by them.
+     * The capture arguments, most wanted first. Kept in one place because the running capture is
+     * recognised by them.
+     *
+     * The first set asks for a dated timestamp on every line, so each request can be shown with
+     * the time it was made. The second drops timestamps altogether and is only used if a capture
+     * program does not understand the request, so an unusual one still records the host names.
      */
-    private static final String CAPTURE_ARGUMENTS =
-            "-i any -p -l -v -t -s 512 'udp dst port 53'";
+    private static final String[] CAPTURE_ARGUMENT_VARIANTS = {
+            "-i any -p -l -v -tttt -s 512 'udp dst port 53'",
+            "-i any -p -l -v -t -s 512 'udp dst port 53'"
+    };
     /**
      * Recognises a running capture whichever program is running it.
      * Matched against the whole command line, so it covers both the bundled program and a system
@@ -83,6 +98,13 @@ class TcpdumpUtils {
      */
     private static final int LOG_TAIL_LINES = 10;
     private static final Pattern TCPDUMP_HOSTNAME_PATTERN = Pattern.compile(TCPDUMP_HOSTNAME_REGEX);
+    /**
+     * Recognises the dated timestamp starting a capture line, ignoring its fraction of a second.
+     */
+    private static final Pattern TCPDUMP_TIME_PATTERN =
+            Pattern.compile("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})");
+    private static final DateTimeFormatter TCPDUMP_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
      * Private constructor.
@@ -127,10 +149,12 @@ class TcpdumpUtils {
 
         StringBuilder attempts = new StringBuilder();
         for (String candidate : captureCandidates(context)) {
-            if (startCapture(context, candidate, file)) {
-                Timber.i("Capturing DNS requests with %s.", candidate);
-                PreferenceHelper.setLastWorkingCapture(context, candidate);
-                return null;
+            for (String arguments : CAPTURE_ARGUMENT_VARIANTS) {
+                if (startCapture(context, candidate, arguments, file)) {
+                    Timber.i("Capturing DNS requests with %s %s.", candidate, arguments);
+                    PreferenceHelper.setLastWorkingCapture(context, candidate);
+                    return null;
+                }
             }
             describeFailedAttempt(context, candidate, file, attempts);
         }
@@ -180,9 +204,10 @@ class TcpdumpUtils {
      * The shell reports success as soon as it backgrounds the command, so only the liveness check
      * tells whether the program actually ran.
      */
-    private static boolean startCapture(Context context, String executable, File logFile) {
+    private static boolean startCapture(
+            Context context, String executable, String arguments, File logFile) {
         String command = libraryPathPrefix(context, executable)
-                + executable + " " + CAPTURE_ARGUMENTS + " >> " + logFile + " 2>&1 &";
+                + executable + " " + arguments + " >> " + logFile + " 2>&1 &";
         Shell.cmd(command).exec();
         try {
             Thread.sleep(START_CHECK_DELAY_MS);
@@ -347,27 +372,37 @@ class TcpdumpUtils {
     }
 
     /**
-     * Get the tcpdump log content.
+     * Get the recorded requests.
+     *
+     * A host is reported once, with the time it was last requested. Lines written by a capture
+     * that does not timestamp them are reported without a time rather than dropped.
      *
      * @param context The application context.
-     * @return The tcpdump log file content.
+     * @return The requests read from the tcpdump log file.
      */
-    static List<String> getLogs(Context context) {
+    static List<DnsRequest> getRequests(Context context) {
         Path logPath = getLogFile(context).toPath();
         // Check if the log file exists
         if (!Files.exists(logPath)) {
             return emptyList();
         }
+        // Keyed by host so a host requested many times is reported once, in the order it first
+        // appeared, carrying the time of its last request.
+        Map<String, Instant> lastSeenByHost = new LinkedHashMap<>();
         try (Stream<String> lines = Files.lines(logPath)) {
-            return lines
-                    .map(TcpdumpUtils::getTcpdumpHostname)
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .collect(Collectors.toList());
-        } catch (IOException exception) {
-            Timber.e(exception, "Can not get cache directory.");
+            lines.forEach(line -> {
+                String host = getTcpdumpHostname(line);
+                if (host != null) {
+                    lastSeenByHost.put(host, getTcpdumpTime(line));
+                }
+            });
+        } catch (IOException | UncheckedIOException exception) {
+            Timber.e(exception, "Failed to read the DNS request log.");
             return emptyList();
         }
+        return lastSeenByHost.entrySet().stream()
+                .map(entry -> new DnsRequest(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -406,6 +441,29 @@ class TcpdumpUtils {
         if (tcpdumpHostnameMatcher.find()) {
             return tcpdumpHostnameMatcher.group(1);
         } else {
+            return null;
+        }
+    }
+
+    /**
+     * Gets the time a tcpdump log line was written.
+     *
+     * The capture prints the time in the local time zone. A line without one comes from a capture
+     * started without timestamps, either an older one or a program that did not support them.
+     *
+     * @param input One line from the dns log.
+     * @return The time of the line, or {@code null} if it carries none.
+     */
+    private static Instant getTcpdumpTime(String input) {
+        Matcher matcher = TCPDUMP_TIME_PATTERN.matcher(input);
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(matcher.group(1), TCPDUMP_TIME_FORMATTER)
+                    .atZone(ZoneId.systemDefault())
+                    .toInstant();
+        } catch (DateTimeParseException exception) {
             return null;
         }
     }

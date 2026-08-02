@@ -145,11 +145,11 @@ public abstract class AdBlockModel {
     }
 
     /**
-     * Get logs.
+     * Get the recorded DNS requests.
      *
-     * @return The logs unique and sorted by date, older first.
+     * @return The requests, unique by host name and sorted by date, older first.
      */
-    public abstract List<String> getLogs();
+    public abstract List<DnsRequest> getRequests();
 
     /**
      * Clear logs.

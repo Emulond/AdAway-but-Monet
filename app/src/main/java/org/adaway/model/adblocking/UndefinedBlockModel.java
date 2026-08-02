@@ -48,7 +48,7 @@ public class UndefinedBlockModel extends AdBlockModel {
     }
 
     @Override
-    public List<String> getLogs() {
+    public List<DnsRequest> getRequests() {
         return emptyList();
     }
 

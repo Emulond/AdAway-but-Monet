@@ -12,12 +12,15 @@ import org.adaway.db.dao.HostEntryDao;
 import org.adaway.db.entity.HostEntry;
 import org.adaway.model.adblocking.AdBlockMethod;
 import org.adaway.model.adblocking.AdBlockModel;
+import org.adaway.model.adblocking.DnsRequest;
 import org.adaway.model.error.HostErrorException;
 import org.adaway.vpn.VpnServiceControls;
 
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import timber.log.Timber;
 
@@ -29,7 +32,11 @@ import timber.log.Timber;
 public class VpnModel extends AdBlockModel {
     private final HostEntryDao hostEntryDao;
     private final LruCache<String, HostEntry> blockCache;
-    private final LinkedHashSet<String> logs;
+    /**
+     * The recorded requests, by host name, in the order they were first seen.
+     * Written by the VPN thread and read by the screen showing them, so every access is guarded.
+     */
+    private final LinkedHashMap<String, Instant> logs;
     private boolean recordingLogs;
     private int requestCount;
 
@@ -48,7 +55,7 @@ public class VpnModel extends AdBlockModel {
                 return VpnModel.this.hostEntryDao.getEntry(key);
             }
         };
-        this.logs = new LinkedHashSet<>();
+        this.logs = new LinkedHashMap<>();
         this.recordingLogs = false;
         this.requestCount = 0;
         this.applied.postValue(VpnServiceControls.isRunning(context));
@@ -89,13 +96,21 @@ public class VpnModel extends AdBlockModel {
     }
 
     @Override
-    public List<String> getLogs() {
-        return new ArrayList<>(this.logs);
+    public List<DnsRequest> getRequests() {
+        synchronized (this.logs) {
+            List<DnsRequest> requests = new ArrayList<>(this.logs.size());
+            for (Map.Entry<String, Instant> log : this.logs.entrySet()) {
+                requests.add(new DnsRequest(log.getKey(), log.getValue()));
+            }
+            return requests;
+        }
     }
 
     @Override
     public void clearLogs() {
-        this.logs.clear();
+        synchronized (this.logs) {
+            this.logs.clear();
+        }
     }
 
     /**
@@ -114,9 +129,11 @@ public class VpnModel extends AdBlockModel {
             Timber.d("Host cache miss rate: %s.", missRate);
             this.requestCount = 0;
         }
-        // Add host to logs
+        // Add host to logs, keeping the time it was last requested
         if (this.recordingLogs) {
-            this.logs.add(host);
+            synchronized (this.logs) {
+                this.logs.put(host, Instant.now());
+            }
         }
         // Check cache
         return this.blockCache.get(host);
