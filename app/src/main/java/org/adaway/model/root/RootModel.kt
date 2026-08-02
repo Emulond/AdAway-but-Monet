@@ -96,15 +96,26 @@ class RootModel(context: Context) : AdBlockModel(context) {
 
     override fun isRecordingLogs(): Boolean = TcpdumpUtils.isTcpdumpRunning()
 
+    @Volatile
+    private var recordingFailure: String? = null
+
+    override fun getRecordingFailure(): String? = this.recordingFailure
+
     override fun setRecordingLogs(recording: Boolean) {
         if (recording) {
-            // Only advertise a running capture once it is confirmed to be alive.
-            if (TcpdumpUtils.startTcpdump(this.context)) {
+            // Only advertise a running capture once it is confirmed to be alive, and report the
+            // reason when it is not: the capture runs outside the application, so a silent failure
+            // is indistinguishable from the toggle not working.
+            val failure = TcpdumpUtils.startTcpdump(this.context)
+            this.recordingFailure = failure
+            if (failure == null) {
                 NotificationHelper.showDnsRecordingNotification(this.context)
             } else {
                 NotificationHelper.clearDnsRecordingNotification(this.context)
+                NotificationHelper.showDnsRecordingFailureNotification(this.context, failure)
             }
         } else {
+            this.recordingFailure = null
             TcpdumpUtils.stopTcpdump()
             NotificationHelper.clearDnsRecordingNotification(this.context)
         }

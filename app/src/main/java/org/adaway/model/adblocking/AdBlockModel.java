@@ -127,6 +127,15 @@ public abstract class AdBlockModel {
     public abstract void setRecordingLogs(boolean recording);
 
     /**
+     * Get why the last attempt to start recording failed.
+     *
+     * @return The reason, or {@code null} when the last attempt succeeded or none was made.
+     */
+    public String getRecordingFailure() {
+        return null;
+    }
+
+    /**
      * Get logs.
      *
      * @return The logs unique and sorted by date, older first.

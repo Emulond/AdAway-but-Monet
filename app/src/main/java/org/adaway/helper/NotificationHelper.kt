@@ -23,6 +23,7 @@ object NotificationHelper {
     private const val UPDATE_APP_PROGRESS_NOTIFICATION_ID = 17
     private const val DNS_RECORDING_NOTIFICATION_ID = 18
     private const val APPLY_CONFIGURATION_NOTIFICATION_ID = 19
+    private const val DNS_RECORDING_FAILURE_NOTIFICATION_ID = 22
     
     @JvmField
     val VPN_RUNNING_SERVICE_NOTIFICATION_ID = 20
@@ -134,12 +135,42 @@ object NotificationHelper {
     }
 
     /**
+     * Report that a DNS request recording could not be started, and why.
+     */
+    @JvmStatic
+    fun showDnsRecordingFailureNotification(context: Context, reason: String) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
+        if (notificationManager == null || !notificationManager.areNotificationsEnabled()) {
+            return
+        }
+
+        val intent = Intent(context, HomeActivity::class.java).apply {
+            putExtra(NavigationRequest.EXTRA_ROUTE, AdAwayRoute.LOG)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val builder = NotificationCompat.Builder(context, DNS_RECORDING_NOTIFICATION_CHANNEL)
+            .setSmallIcon(R.drawable.logo)
+            .setColor(context.getColor(R.color.notification))
+            .setContentTitle(context.getString(R.string.notification_dns_recording_failed_title))
+            .setContentText(reason)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(reason))
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+
+        notificationManager.notify(DNS_RECORDING_FAILURE_NOTIFICATION_ID, builder.build())
+    }
+
+    /**
      * Clear the DNS request recording notification.
      */
     @JvmStatic
     fun clearDnsRecordingNotification(context: Context) {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
         notificationManager.cancel(DNS_RECORDING_NOTIFICATION_ID)
+        notificationManager.cancel(DNS_RECORDING_FAILURE_NOTIFICATION_ID)
     }
 
     @JvmStatic

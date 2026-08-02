@@ -33,6 +33,9 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     val recording: StateFlow<Boolean> = _recording
 
 
+    private val _recordingFailure = MutableStateFlow<String?>(null)
+    val recordingFailure: StateFlow<String?> = _recordingFailure
+
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
 
@@ -52,6 +55,10 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun areBlockedRequestsIgnored(): Boolean = adBlockModel.method == AdBlockMethod.ROOT
+
+    fun dismissRecordingFailure() {
+        _recordingFailure.value = null
+    }
 
     fun clearLogs() {
         adBlockModel.clearLogs()
@@ -93,6 +100,7 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
                 adBlockModel.setRecordingLogs(enable)
                 adBlockModel.isRecordingLogs
             }
+            _recordingFailure.value = if (_recording.value) null else adBlockModel.recordingFailure
         }
     }
 

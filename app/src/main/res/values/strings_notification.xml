@@ -19,6 +19,7 @@
     <string name="notification_dns_recording_channel_description">DNS request recording notifications</string>
     <string name="notification_dns_recording_title">Recording DNS requests</string>
     <string name="notification_dns_recording_text">Tap to open the DNS log.</string>
+    <string name="notification_dns_recording_failed_title">DNS recording could not start</string>
     <!-- VPN notification -->
     <string name="notification_vpn_channel_name">VPN</string>
     <string name="notification_vpn_channel_description">VPN running notifications</string>

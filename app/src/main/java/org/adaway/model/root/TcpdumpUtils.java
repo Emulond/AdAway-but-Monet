@@ -22,6 +22,8 @@ package org.adaway.model.root;
 
 import android.content.Context;
 
+import org.adaway.R;
+
 import com.topjohnwu.superuser.Shell;
 
 import java.io.File;
@@ -78,21 +80,34 @@ class TcpdumpUtils {
      * Start tcpdump tool.
      *
      * @param context The application context.
-     * @return returns true if starting worked
+     * @return {@code null} when the capture started, otherwise the reason it did not
      */
-    static boolean startTcpdump(Context context) {
+    static String startTcpdump(Context context) {
         Timber.d("Starting tcpdump...");
         checkSystemTcpdump();
+
+        // Root is required to capture packets at all.
+        if (!Shell.getShell().isRoot()) {
+            return context.getString(R.string.dns_recording_error_no_root);
+        }
+
+        // The capture runs the executable bundled in the native library directory.
+        File executable = new File(
+                context.getApplicationInfo().nativeLibraryDir,
+                ShellUtils.getExecutableName(TCPDUMP_EXECUTABLE));
+        if (!executable.exists()) {
+            return context.getString(R.string.dns_recording_error_missing, executable.getAbsolutePath());
+        }
 
         File file = getLogFile(context);
         try {
             // Create log file before using it with tcpdump if not exists
             if (!file.exists() && !file.createNewFile()) {
-                return false;
+                return context.getString(R.string.dns_recording_error_log_file, file.getAbsolutePath());
             }
         } catch (IOException e) {
             Timber.e(e, "Problem while getting cache directory!");
-            return false;
+            return context.getString(R.string.dns_recording_error_log_file, file.getAbsolutePath());
         }
 
         // "-i any": listen on any network interface
@@ -105,8 +120,7 @@ class TcpdumpUtils {
         String parameters = "-i any -p -l -v -t -s 512 'udp dst port 53' >> " + file + " 2>&1";
 
         if (!runBundledExecutable(context, TCPDUMP_EXECUTABLE, parameters)) {
-            Timber.w("Failed to start tcpdump.");
-            return false;
+            return context.getString(R.string.dns_recording_error_start);
         }
         // The executable is backgrounded by the shell, so a successful command only means it was
         // launched. Give it a moment and check it is still alive, otherwise a tcpdump that exits
@@ -115,15 +129,16 @@ class TcpdumpUtils {
             Thread.sleep(START_CHECK_DELAY_MS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return isTcpdumpRunning();
         }
-        boolean running = isTcpdumpRunning();
-        if (!running) {
-            // Anything tcpdump printed before dying was redirected to the log file.
-            Timber.w("Tcpdump exited right after being started. Log file content: %s",
-                    readLogFileTail(context));
+        if (isTcpdumpRunning()) {
+            return null;
         }
-        return running;
+        // Anything tcpdump printed before dying was redirected to the log file.
+        String output = readLogFileTail(context);
+        Timber.w("Tcpdump exited right after being started. Log file content: %s", output);
+        return context.getString(
+                R.string.dns_recording_error_exited,
+                output.isEmpty() ? context.getString(R.string.dns_recording_error_no_output) : output);
     }
 
     /**

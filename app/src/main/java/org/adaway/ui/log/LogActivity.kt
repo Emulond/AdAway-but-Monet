@@ -100,6 +100,7 @@ internal fun LogRoute(
     }
     var redirectHost by remember { mutableStateOf<String?>(null) }
     val recording by viewModel.recording.collectAsStateWithLifecycle()
+    val recordingFailure by viewModel.recordingFailure.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val blockedRequestsIgnored = remember(viewModel) { viewModel.areBlockedRequestsIgnored() }
@@ -139,6 +140,19 @@ internal fun LogRoute(
         onOpenHost = { hostName -> openHostInBrowser(context, hostName) },
         onCopyHost = { hostName -> Clipboard.copyHostToClipboard(context, hostName) }
     )
+
+    recordingFailure?.let { reason ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissRecordingFailure,
+            title = { Text(text = stringResource(R.string.dns_recording_error_title)) },
+            text = { Text(text = reason) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissRecordingFailure) {
+                    Text(text = stringResource(android.R.string.ok))
+                }
+            }
+        )
+    }
 
     redirectHost?.let { hostName ->
         RedirectIpDialog(
