@@ -18,7 +18,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.adaway.AdAwayApplication
 import org.adaway.db.AppDatabase
-import org.adaway.db.dao.HostListItemDao
+import org.adaway.db.HostCounts
+import org.adaway.db.dao.MetadataDao
+import org.adaway.db.entity.ListType
 import org.adaway.db.dao.HostsSourceDao
 import androidx.annotation.StringRes
 import org.adaway.R
@@ -48,8 +50,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val adBlockModel: AdBlockModel
     private val updateModel: UpdateModel
 
+    private val database: AppDatabase
     private val hostsSourceDao: HostsSourceDao
-    private val hostListItemDao: HostListItemDao
+    private val metadataDao: MetadataDao
 
     private val _pending = MutableStateFlow(false)
     val pending: StateFlow<Boolean> = _pending
@@ -63,9 +66,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         adBlockModel = awayApplication.adBlockModel
         updateModel = awayApplication.updateModel
 
-        val database = AppDatabase.getInstance(application)
+        database = AppDatabase.getInstance(application)
         hostsSourceDao = database.hostsSourceDao()
-        hostListItemDao = database.hostsListItemDao()
+        metadataDao = database.metadataDao()
+
+        refreshHostCounts()
 
         VpnStatusRepository.update(PreferenceHelper.getVpnServiceStatus(application))
     }
@@ -101,20 +106,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         .asFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), updateModel.manifest.value)
 
-    val blockedHostCount: StateFlow<Int> = hostListItemDao.getBlockedHostCount()
+    /**
+     * The host counters, read from their cached values so the screen shows them at once rather
+     * than counting distinct hosts across millions of rows on every display.
+     */
+    private fun cachedHostCount(type: ListType): StateFlow<Int> = metadataDao.observeHostCount(type)
         .asFlow()
-        .map { it }
+        .map { it?.toIntOrNull() ?: 0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), 0)
 
-    val allowedHostCount: StateFlow<Int> = hostListItemDao.getAllowedHostCount()
-        .asFlow()
-        .map { it }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), 0)
+    val blockedHostCount: StateFlow<Int> = cachedHostCount(ListType.BLOCKED)
 
-    val redirectHostCount: StateFlow<Int> = hostListItemDao.getRedirectHostCount()
-        .asFlow()
-        .map { it }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), 0)
+    val allowedHostCount: StateFlow<Int> = cachedHostCount(ListType.ALLOWED)
+
+    val redirectHostCount: StateFlow<Int> = cachedHostCount(ListType.REDIRECTED)
 
     /**
      * The enabled sources, classified into up to date and outdated.
@@ -134,6 +139,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun HostsSource.isUpToDate(): Boolean =
         SourceUpdateStatus.isUpToDate(localModificationDate, onlineModificationDate)
+
+    /**
+     * Recompute the cached host counters off the main thread.
+     */
+    private fun refreshHostCounts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            HostCounts.refresh(database)
+        }
+    }
 
     fun checkForAppUpdate() {
         viewModelScope.launch(Dispatchers.IO) {

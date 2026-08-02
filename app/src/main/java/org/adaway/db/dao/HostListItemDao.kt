@@ -40,6 +40,13 @@ interface HostListItemDao {
     @Query("SELECT id FROM hosts_lists WHERE host = :host AND source_id = 1 LIMIT 1")
     fun getHostId(host: String): Optional<Int>
 
+    /**
+     * Count the distinct enabled hosts of a type.
+     * Expensive over millions of rows, so its result is cached rather than read on every display.
+     */
+    @Query("SELECT COUNT(DISTINCT host) FROM hosts_lists WHERE type = :type AND enabled = 1")
+    fun countHosts(type: Int): Int
+
     @Query("SELECT COUNT(DISTINCT host) FROM hosts_lists WHERE type = 0 AND enabled = 1")
     fun getBlockedHostCount(): LiveData<Int>
 

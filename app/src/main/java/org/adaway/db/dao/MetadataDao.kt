@@ -1,9 +1,11 @@
 package org.adaway.db.dao
 
+import androidx.lifecycle.LiveData
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import org.adaway.db.entity.ListType
 import org.adaway.db.entity.Metadata
 import java.util.UUID
 
@@ -14,6 +16,23 @@ interface MetadataDao {
 
     @Query("SELECT `value` FROM `metadata` WHERE `key` = :key LIMIT 1")
     fun get(key: String): String?
+
+    @Query("SELECT `value` FROM `metadata` WHERE `key` = :key LIMIT 1")
+    fun observe(key: String): LiveData<String?>
+
+    /**
+     * Observe a cached host counter.
+     * The counters are expensive to compute over millions of rows, so the home screen reads the
+     * last computed value and is updated when a new one is stored.
+     */
+    fun observeHostCount(type: ListType): LiveData<String?> = observe(hostCountKey(type))
+
+    fun setHostCount(type: ListType, count: Int) {
+        put(Metadata().apply {
+            key = hostCountKey(type)
+            value = count.toString()
+        })
+    }
 
     /**
      * Record that the host entries were rebuilt.
@@ -35,6 +54,8 @@ interface MetadataDao {
     fun getHostEntriesRevision(): String = get(HOST_ENTRIES_REVISION).orEmpty()
 
     companion object {
+        private fun hostCountKey(type: ListType): String = "hostCount." + type.name
+
         private const val HOST_ENTRIES_REVISION = "hostEntriesRevision"
     }
 }

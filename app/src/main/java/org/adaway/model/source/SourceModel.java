@@ -27,6 +27,7 @@ import androidx.lifecycle.MutableLiveData;
 
 import org.adaway.R;
 import org.adaway.db.AppDatabase;
+import org.adaway.db.HostCounts;
 import org.adaway.db.converter.ZonedDateTimeConverter;
 import org.adaway.db.dao.HostEntryDao;
 import org.adaway.db.dao.HostListItemDao;
@@ -474,6 +475,10 @@ public class SourceModel {
             // file can never be considered current for entries it was not built from.
             this.metadataDao.markHostEntriesRebuilt();
         });
+        // Refresh the cached counters here, once, rather than counting distinct hosts across
+        // millions of rows every time the home screen is shown. Done outside the transaction
+        // because it only reads.
+        HostCounts.refresh(this.database);
     }
 
     /**
