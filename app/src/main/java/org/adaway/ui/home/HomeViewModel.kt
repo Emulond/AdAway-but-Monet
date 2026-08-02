@@ -23,9 +23,6 @@ import org.adaway.db.HostCounts
 import org.adaway.db.dao.MetadataDao
 import org.adaway.db.entity.ListType
 import org.adaway.db.dao.HostsSourceDao
-import androidx.annotation.StringRes
-import org.adaway.R
-import org.adaway.helper.ProgressNotifications
 import org.adaway.helper.PreferenceHelper
 import org.adaway.model.adblocking.AdBlockMethod
 import org.adaway.model.adblocking.AdBlockModel
@@ -33,7 +30,8 @@ import org.adaway.model.error.HostError
 import org.adaway.model.error.HostErrorException
 import org.adaway.db.entity.HostsSource
 import org.adaway.model.source.SourceModel
-import org.adaway.model.root.ProgressReporter
+import androidx.work.WorkInfo
+import org.adaway.model.source.SourceUpdateService
 import org.adaway.model.source.SourceUpdateStatus
 import org.adaway.model.update.Manifest
 import org.adaway.model.update.UpdateModel
@@ -56,7 +54,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val metadataDao: MetadataDao
 
     private val _pending = MutableStateFlow(false)
-    val pending: StateFlow<Boolean> = _pending
+
+    /**
+     * The state of the update the user asked for, which now runs outside this view model.
+     */
+    private val manualUpdate = SourceUpdateService.observeManualWork(application)
+        .asFlow()
+        .map { infos -> infos.firstOrNull() }
+
+    val pending: StateFlow<Boolean> = combine(
+        _pending,
+        manualUpdate.map { it?.state?.isFinished == false }
+    ) { local, updating -> local || updating }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(FLOW_STOP_TIMEOUT_MILLIS), false)
 
     private val _error = MutableSharedFlow<HostError>()
     val error: SharedFlow<HostError> = _error
@@ -72,6 +82,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         metadataDao = database.metadataDao()
 
         refreshHostCounts()
+        observeManualUpdate()
 
         VpnStatusRepository.update(PreferenceHelper.getVpnServiceStatus(application))
     }
@@ -149,6 +160,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         SourceUpdateStatus.isUpToDate(localModificationDate, onlineModificationDate)
 
     /**
+     * Report the outcome of the update the user asked for.
+     */
+    private fun observeManualUpdate() {
+        viewModelScope.launch {
+            manualUpdate.collect { info ->
+                when {
+                    info == null -> Unit
+                    info.state == WorkInfo.State.SUCCEEDED -> {
+                        if (info.outputData.getBoolean(SourceUpdateService.KEY_UP_TO_DATE, false)) {
+                            confirmAllSourcesUpToDate()
+                        }
+                        refreshHostCounts()
+                    }
+
+                    info.state == WorkInfo.State.FAILED -> {
+                        info.outputData.getString(SourceUpdateService.KEY_ERROR)
+                            ?.let { name -> runCatching { HostError.valueOf(name) }.getOrNull() }
+                            ?.let { _error.emit(it) }
+                    }
+
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    /**
      * Show that every source is up to date, then return the summary to its usual content.
      */
     private fun confirmAllSourcesUpToDate() {
@@ -200,99 +238,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Check the sources for update and retrieve them when at least one is outdated.
      *
-     * This is the single entry point behind the home screen update action: checking without
-     * retrieving left the user to notice the result and press a second button.
+     * Enqueued rather than run here: it used to run in this view model's scope, so leaving the
+     * screen cancelled the update part way through.
      */
     fun update() {
-        if (_pending.value) {
-            return
-        }
-        viewModelScope.launch {
-            val application = getApplication<Application>()
-            try {
-                _pending.value = true
-                // Reported from the tap, so leaving the application straight away still shows it.
-                ProgressNotifications.report(application, ProgressNotifications.Kind.UPDATE_HOSTS, null)
-                withContext(Dispatchers.IO) {
-                    val hasUpdate = sourceModel.checkForUpdate { completed, total, _ ->
-                        reportSourceProgress(
-                            application, completed, total, R.string.notification_update_host_progress_check
-                        )
-                    }
-                    if (!hasUpdate) {
-                        confirmAllSourcesUpToDate()
-                        return@withContext
-                    }
-                    sourceModel.retrieveHostsSources { completed, total, _ ->
-                        reportSourceProgress(
-                            application, completed, total, R.string.notification_update_host_progress_source
-                        )
-                    }
-                    reportApplyingSources(application)
-                    adBlockModel.apply()
-                }
-            } catch (exception: HostErrorException) {
-                Timber.w(exception, "Failed to update.")
-                _error.emit(exception.error)
-            } finally {
-                ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
-                _pending.value = false
-            }
-        }
+        SourceUpdateService.runNow(getApplication(), false)
     }
 
     /**
      * Retrieve the sources unconditionally, without checking them for update first.
      */
     fun sync() {
-        if (_pending.value) {
-            return
-        }
-        viewModelScope.launch {
-            val application = getApplication<Application>()
-            try {
-                _pending.value = true
-                ProgressNotifications.report(application, ProgressNotifications.Kind.UPDATE_HOSTS, null)
-                withContext(Dispatchers.IO) {
-                    sourceModel.retrieveHostsSources { completed, total, _ ->
-                        reportSourceProgress(
-                            application, completed, total, R.string.notification_update_host_progress_source
-                        )
-                    }
-                    reportApplyingSources(application)
-                    adBlockModel.apply()
-                }
-            } catch (exception: HostErrorException) {
-                Timber.w(exception, "Failed to sync.")
-                _error.emit(exception.error)
-            } finally {
-                ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
-                _pending.value = false
-            }
-        }
-    }
-
-    private fun reportSourceProgress(
-        application: Application,
-        completed: Int,
-        total: Int,
-        @StringRes textRes: Int
-    ) {
-        ProgressNotifications.report(
-            application,
-            ProgressNotifications.Kind.UPDATE_HOSTS,
-            ProgressReporter.percentOf(completed, total),
-            application.getString(textRes, (completed + 1).coerceAtMost(total), total)
-        )
-    }
-
-    private fun reportApplyingSources(application: Application) {
-        ProgressNotifications.report(
-            application,
-            ProgressNotifications.Kind.UPDATE_HOSTS,
-            100,
-            application.getString(R.string.notification_update_host_progress_apply)
-        )
+        SourceUpdateService.runNow(getApplication(), true)
     }
 
     fun enableAllSources() {
