@@ -59,7 +59,12 @@ public final class ApkUpdateService {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME);
     }
 
-    static void syncPreferences(Context context) {
+    /**
+     * Schedule or cancel the application update check according to the preferences.
+     *
+     * @param context The application context.
+     */
+    public static void syncPreferences(Context context) {
         if (PreferenceHelper.getUpdateCheckAppDaily(context)) {
             enqueueWork(context, KEEP);
         } else {
