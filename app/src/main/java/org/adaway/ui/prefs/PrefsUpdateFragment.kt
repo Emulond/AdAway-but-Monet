@@ -1,16 +1,32 @@
 package org.adaway.ui.prefs
 
+import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.adaway.R
+import org.adaway.model.source.SourceUpdateService
 import org.adaway.ui.compose.ExpressiveAsymmetricShape1
 import org.adaway.ui.compose.ExpressiveAsymmetricShape2
 import org.adaway.ui.compose.ExpressivePage
+import org.adaway.ui.compose.safeClickable
 
 @Composable
 internal fun PrefsUpdateScreen(
@@ -23,6 +39,7 @@ internal fun PrefsUpdateScreen(
     checkHostsDaily: Boolean,
     automaticUpdateDaily: Boolean,
     updateOnlyOnWifi: Boolean,
+    updateIntervalHours: Int,
     onOpenNotifications: () -> Unit,
     onCheckAppStartupChanged: (Boolean) -> Unit,
     onCheckAppDailyChanged: (Boolean) -> Unit,
@@ -30,8 +47,10 @@ internal fun PrefsUpdateScreen(
     onCheckHostsStartupChanged: (Boolean) -> Unit,
     onCheckHostsDailyChanged: (Boolean) -> Unit,
     onAutomaticUpdateDailyChanged: (Boolean) -> Unit,
-    onUpdateOnlyWifiChanged: (Boolean) -> Unit
+    onUpdateOnlyWifiChanged: (Boolean) -> Unit,
+    onUpdateIntervalChanged: (Int) -> Unit
 ) {
+    var intervalPickerVisible by remember { mutableStateOf(false) }
     ExpressivePage {
         if (notificationsDisabled) {
             PreferenceSection(
@@ -98,6 +117,14 @@ internal fun PrefsUpdateScreen(
                 onCheckedChange = onAutomaticUpdateDailyChanged
             )
             PreferenceDivider()
+            PreferenceRow(
+                iconRes = R.drawable.ic_sync_24dp,
+                titleRes = R.string.pref_update_interval,
+                summary = stringResource(updateIntervalLabel(updateIntervalHours)),
+                enabled = checkHostsDaily,
+                onClick = { intervalPickerVisible = true }
+            )
+            PreferenceDivider()
             PreferenceToggleRow(
                 iconRes = R.drawable.ic_vpn_key_24dp,
                 titleRes = R.string.pref_update_sync_unmetered_only,
@@ -106,9 +133,55 @@ internal fun PrefsUpdateScreen(
                 onCheckedChange = onUpdateOnlyWifiChanged
             )
         }
+
+        if (intervalPickerVisible) {
+            AlertDialog(
+                onDismissRequest = { intervalPickerVisible = false },
+                title = { Text(text = stringResource(R.string.pref_update_interval)) },
+                text = {
+                    Column {
+                        SourceUpdateService.UPDATE_INTERVALS_HOURS.forEach { hours ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .safeClickable {
+                                        onUpdateIntervalChanged(hours)
+                                        intervalPickerVisible = false
+                                    }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = hours == updateIntervalHours,
+                                    onClick = {
+                                        onUpdateIntervalChanged(hours)
+                                        intervalPickerVisible = false
+                                    }
+                                )
+                                Text(
+                                    text = stringResource(updateIntervalLabel(hours)),
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { intervalPickerVisible = false }) {
+                        Text(text = stringResource(android.R.string.cancel))
+                    }
+                }
+            )
+        }
         Spacer(modifier = Modifier.size(32.dp))
     }
 }
 
-
-
+@StringRes
+private fun updateIntervalLabel(hours: Int): Int = when (hours) {
+    12 -> R.string.pref_update_interval_12h
+    24 -> R.string.pref_update_interval_24h
+    48 -> R.string.pref_update_interval_2d
+    168 -> R.string.pref_update_interval_1w
+    else -> R.string.pref_update_interval_6h
+}

@@ -304,4 +304,28 @@ object PreferenceHelper {
     }
 
     private const val PREF_LAST_KNOWN_DNS_RECORDING = "lastKnownDnsRecording"
+
+    /**
+     * Get how often the hosts sources are checked, in hours.
+     */
+    @JvmStatic
+    fun getUpdateIntervalHours(context: Context): Int {
+        return context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_UPDATE_INTERVAL_HOURS, DEFAULT_UPDATE_INTERVAL_HOURS)
+    }
+
+    @JvmStatic
+    fun setUpdateIntervalHours(context: Context, hours: Int) {
+        context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_UPDATE_INTERVAL_HOURS, hours)
+            .apply()
+    }
+
+    private const val PREF_UPDATE_INTERVAL_HOURS = "updateIntervalHours"
+
+    /**
+     * The interval used before it could be configured.
+     */
+    const val DEFAULT_UPDATE_INTERVAL_HOURS = 6
 }

@@ -21,9 +21,15 @@ import java.util.concurrent.TimeUnit.HOURS
 object SourceUpdateService {
     private const val WORK_NAME = "HostsUpdateWork"
 
+    /**
+     * The intervals offered to the user, in hours.
+     */
+    @JvmField
+    val UPDATE_INTERVALS_HOURS = intArrayOf(6, 12, 24, 48, 168)
+
     @JvmStatic
     fun enable(context: Context, unmeteredNetworkOnly: Boolean) {
-        enqueueWork(context, ExistingPeriodicWorkPolicy.UPDATE, unmeteredNetworkOnly)
+        enqueueWork(context, ExistingPeriodicWorkPolicy.UPDATE, unmeteredNetworkOnly, context.intervalHours())
     }
 
     @JvmStatic
@@ -34,7 +40,35 @@ object SourceUpdateService {
     @JvmStatic
     fun syncPreferences(context: Context) {
         if (PreferenceHelper.getUpdateCheckHostsDaily(context)) {
-            enqueueWork(context, ExistingPeriodicWorkPolicy.KEEP, PreferenceHelper.getUpdateOnlyOnWifi(context))
+            enqueueWork(
+                context,
+                ExistingPeriodicWorkPolicy.KEEP,
+                PreferenceHelper.getUpdateOnlyOnWifi(context),
+                context.intervalHours()
+            )
+        } else {
+            disable(context)
+        }
+    }
+
+    private fun Context.intervalHours(): Int =
+        PreferenceHelper.getUpdateIntervalHours(this)
+            .takeIf { it in UPDATE_INTERVALS_HOURS }
+            ?: PreferenceHelper.DEFAULT_UPDATE_INTERVAL_HOURS
+
+    /**
+     * Re-enqueue the work with the current settings, replacing any previously scheduled one.
+     * Called when a setting that shapes the schedule changes.
+     */
+    @JvmStatic
+    fun reschedule(context: Context) {
+        if (PreferenceHelper.getUpdateCheckHostsDaily(context)) {
+            enqueueWork(
+                context,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                PreferenceHelper.getUpdateOnlyOnWifi(context),
+                context.intervalHours()
+            )
         } else {
             disable(context)
         }
@@ -43,23 +77,29 @@ object SourceUpdateService {
     private fun enqueueWork(
         context: Context,
         workPolicy: ExistingPeriodicWorkPolicy,
-        unmeteredNetworkOnly: Boolean
+        unmeteredNetworkOnly: Boolean,
+        intervalHours: Int
     ) {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             WORK_NAME,
             workPolicy,
-            getWorkRequest(unmeteredNetworkOnly)
+            getWorkRequest(unmeteredNetworkOnly, intervalHours)
         )
     }
 
-    private fun getWorkRequest(unmeteredNetworkOnly: Boolean): PeriodicWorkRequest {
+    private fun getWorkRequest(unmeteredNetworkOnly: Boolean, intervalHours: Int): PeriodicWorkRequest {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(if (unmeteredNetworkOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .setRequiresStorageNotLow(true)
             .build()
-        return PeriodicWorkRequest.Builder(HostsSourcesUpdateWorker::class.java, 6, HOURS)
+        return PeriodicWorkRequest.Builder(
+            HostsSourcesUpdateWorker::class.java,
+            intervalHours.toLong(),
+            HOURS
+        )
             .setConstraints(constraints)
-            .setInitialDelay(3, HOURS)
+            // Start no earlier than half an interval, so enabling it does not run immediately.
+            .setInitialDelay((intervalHours / 2).coerceAtLeast(1).toLong(), HOURS)
             .build()
     }
 

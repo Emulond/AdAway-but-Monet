@@ -73,6 +73,11 @@ class PrefsViewModel(application: Application) : AndroidViewModel(application) {
     var automaticUpdateDaily by mutableStateOf(false)
         private set
     var updateOnlyOnWifi by mutableStateOf(false)
+
+    /**
+     * How often the hosts sources are checked, in hours.
+     */
+    var updateIntervalHours by mutableStateOf(PreferenceHelper.DEFAULT_UPDATE_INTERVAL_HOURS)
         private set
 
     // Root screen states
@@ -141,6 +146,7 @@ class PrefsViewModel(application: Application) : AndroidViewModel(application) {
             context.getString(R.string.pref_automatic_update_daily_key),
             context.resources.getBoolean(R.bool.pref_automatic_update_daily_def)
         )
+        updateIntervalHours = PreferenceHelper.getUpdateIntervalHours(context)
         updateOnlyOnWifi = prefs.getBoolean(
             context.getString(R.string.pref_update_only_on_wifi_key),
             context.resources.getBoolean(R.bool.pref_update_only_on_wifi_def)
@@ -282,6 +288,13 @@ class PrefsViewModel(application: Application) : AndroidViewModel(application) {
             .putBoolean(context.getString(R.string.pref_update_only_on_wifi_key), enabled)
             .apply()
         SourceUpdateService.enable(context, enabled)
+    }
+
+    fun updateUpdateIntervalHours(hours: Int) {
+        updateIntervalHours = hours
+        PreferenceHelper.setUpdateIntervalHours(context, hours)
+        // Replace the scheduled work, otherwise the new interval only applies to a future schedule.
+        SourceUpdateService.reschedule(context)
     }
 
     fun updateNeverReboot(enabled: Boolean) {

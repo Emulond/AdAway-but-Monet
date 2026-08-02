@@ -139,6 +139,7 @@ private fun PrefsUpdateRoute(viewModel: PrefsViewModel) {
         checkHostsDaily = viewModel.checkHostsDaily,
         automaticUpdateDaily = viewModel.automaticUpdateDaily,
         updateOnlyOnWifi = viewModel.updateOnlyOnWifi,
+        updateIntervalHours = viewModel.updateIntervalHours,
         onOpenNotifications = {
             val settingsIntent = Intent(ACTION_APP_NOTIFICATION_SETTINGS)
                 .addFlags(FLAG_ACTIVITY_NEW_TASK)
@@ -151,7 +152,8 @@ private fun PrefsUpdateRoute(viewModel: PrefsViewModel) {
         onCheckHostsStartupChanged = viewModel::updateCheckHostsStartup,
         onCheckHostsDailyChanged = viewModel::updateCheckHostsDaily,
         onAutomaticUpdateDailyChanged = viewModel::updateAutomaticUpdateDaily,
-        onUpdateOnlyWifiChanged = viewModel::updateUpdateOnlyOnWifi
+        onUpdateOnlyWifiChanged = viewModel::updateUpdateOnlyOnWifi,
+        onUpdateIntervalChanged = viewModel::updateUpdateIntervalHours
     )
 }
 
