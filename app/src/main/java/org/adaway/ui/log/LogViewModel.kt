@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import org.adaway.db.entity.ListType
 import org.adaway.model.adblocking.AdBlockMethod
 import org.adaway.model.adblocking.AdBlockModel
 import org.adaway.util.ExpressiveToast
+import timber.log.Timber
 
 /**
  * A message about the last recording attempt: why it failed, or a limitation of the running one.
@@ -85,15 +87,24 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     fun updateLogs() {
         viewModelScope.launch {
             _refreshing.value = true
-            val logItems = withContext(Dispatchers.IO) {
-                adBlockModel.logs
-                    .parallelStream()
-                    .map { log -> LogEntry(log, hostEntryDao.getTypeOfHost(log)) }
-                    .sorted(sort.comparator())
-                    .toList()
+            try {
+                val logItems = withContext(Dispatchers.IO) {
+                    adBlockModel.logs
+                        .parallelStream()
+                        .map { log -> LogEntry(log, hostEntryDao.getTypeOfHost(log)) }
+                        .sorted(sort.comparator())
+                        .toList()
+                }
+                _logs.value = logItems
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                // Reading the captured requests must never bring the application down: it runs on
+                // every resume of the screen, whether or not the capture is still running.
+                Timber.w(exception, "Failed to read the captured DNS requests.")
+            } finally {
+                _refreshing.value = false
             }
-            _logs.value = logItems
-            _refreshing.value = false
         }
     }
 
