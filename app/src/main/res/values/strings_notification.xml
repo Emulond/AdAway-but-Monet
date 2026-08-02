@@ -9,6 +9,8 @@
     <string name="notification_update_app_available_text">A new version of AdAway is available for download.</string>
     <string name="notification_update_host_progress_title">Updating hosts sources</string>
     <string name="notification_update_host_progress_text">Downloading and applying source updates…</string>
+    <string name="notification_update_host_progress_check">Checking source %1$d out of %2$d</string>
+    <string name="notification_update_host_progress_apply">Applying the updated sources</string>
     <string name="notification_update_host_progress_source">Updating source %1$d out of %2$d</string>
     <string name="notification_update_app_progress_title">Downloading AdAway update</string>
     <!-- Configuration application notification -->

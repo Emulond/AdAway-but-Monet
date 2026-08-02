@@ -173,6 +173,17 @@ public class SourceModel {
      * @throws HostErrorException If the hosts sources could not be checked.
      */
     public boolean checkForUpdate() throws HostErrorException {
+        return checkForUpdate((completed, total, label) -> {
+        });
+    }
+
+    /**
+     * Check if there is update available for hosts sources.
+     *
+     * @param listener The listener notified of the check progress.
+     * @throws HostErrorException If the hosts sources could not be checked.
+     */
+    public boolean checkForUpdate(SourceUpdateListener listener) throws HostErrorException {
         // Check current connection
         if (isDeviceOffline()) {
             throw new HostErrorException(NO_CONNECTION);
@@ -189,11 +200,14 @@ public class SourceModel {
         // Update state
         setState(R.string.status_check);
         // Check each source
+        int checkedSourceCount = 0;
         for (HostsSource source : sources) {
             // Get URL and lastModified from db
             ZonedDateTime lastModifiedLocal = source.getLocalModificationDate();
             // Update state
             setState(R.string.status_check_source, source.getLabel());
+            listener.onSourceUpdateStarted(checkedSourceCount, sources.size(), source.getLabel());
+            checkedSourceCount++;
             // Get hosts source last update
             ZonedDateTime lastModifiedOnline = getHostsSourceLastUpdate(source);
             // Some help with debug here

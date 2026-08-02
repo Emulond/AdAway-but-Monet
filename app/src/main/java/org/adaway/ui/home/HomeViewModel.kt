@@ -20,6 +20,7 @@ import org.adaway.AdAwayApplication
 import org.adaway.db.AppDatabase
 import org.adaway.db.dao.HostListItemDao
 import org.adaway.db.dao.HostsSourceDao
+import androidx.annotation.StringRes
 import org.adaway.R
 import org.adaway.helper.ProgressNotifications
 import org.adaway.helper.PreferenceHelper
@@ -180,12 +181,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 // Reported from the tap, so leaving the application straight away still shows it.
                 ProgressNotifications.report(application, ProgressNotifications.Kind.UPDATE_HOSTS, null)
                 withContext(Dispatchers.IO) {
-                    if (!sourceModel.checkForUpdate()) {
+                    val hasUpdate = sourceModel.checkForUpdate { completed, total, _ ->
+                        reportSourceProgress(
+                            application, completed, total, R.string.notification_update_host_progress_check
+                        )
+                    }
+                    if (!hasUpdate) {
                         return@withContext
                     }
                     sourceModel.retrieveHostsSources { completed, total, _ ->
-                        reportSourceProgress(application, completed, total)
+                        reportSourceProgress(
+                            application, completed, total, R.string.notification_update_host_progress_source
+                        )
                     }
+                    reportApplyingSources(application)
                     adBlockModel.apply()
                 }
             } catch (exception: HostErrorException) {
@@ -212,8 +221,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 ProgressNotifications.report(application, ProgressNotifications.Kind.UPDATE_HOSTS, null)
                 withContext(Dispatchers.IO) {
                     sourceModel.retrieveHostsSources { completed, total, _ ->
-                        reportSourceProgress(application, completed, total)
+                        reportSourceProgress(
+                            application, completed, total, R.string.notification_update_host_progress_source
+                        )
                     }
+                    reportApplyingSources(application)
                     adBlockModel.apply()
                 }
             } catch (exception: HostErrorException) {
@@ -226,16 +238,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun reportSourceProgress(application: Application, completed: Int, total: Int) {
+    private fun reportSourceProgress(
+        application: Application,
+        completed: Int,
+        total: Int,
+        @StringRes textRes: Int
+    ) {
         ProgressNotifications.report(
             application,
             ProgressNotifications.Kind.UPDATE_HOSTS,
             ProgressReporter.percentOf(completed, total),
-            application.getString(
-                R.string.notification_update_host_progress_source,
-                (completed + 1).coerceAtMost(total),
-                total
-            )
+            application.getString(textRes, (completed + 1).coerceAtMost(total), total)
+        )
+    }
+
+    private fun reportApplyingSources(application: Application) {
+        ProgressNotifications.report(
+            application,
+            ProgressNotifications.Kind.UPDATE_HOSTS,
+            100,
+            application.getString(R.string.notification_update_host_progress_apply)
         )
     }
 

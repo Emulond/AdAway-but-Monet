@@ -72,9 +72,18 @@ object SourceUpdateService {
             val application = applicationContext as AdAwayApplication
             val model = application.sourceModel
             val hasUpdate = try {
-                model.checkForUpdate()
+                ProgressNotifications.report(
+                    application, ProgressNotifications.Kind.UPDATE_HOSTS, null, null, false
+                )
+                model.checkForUpdate { completed, total, _ ->
+                    reportProgress(
+                        application, completed, total,
+                        R.string.notification_update_host_progress_check
+                    )
+                }
             } catch (exception: HostErrorException) {
                 Timber.e(exception, "Failed to check for update. Will retry later.")
+                ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
                 return Result.retry()
             }
 
@@ -87,36 +96,53 @@ object SourceUpdateService {
                     Result.failure()
                 }
             }
+            ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
             return Result.success()
+        }
+
+        /**
+         * Report the progress of a background update. Always notified: there is no screen showing
+         * it, unlike an update started by the user.
+         */
+        private fun reportProgress(
+            application: AdAwayApplication,
+            completed: Int,
+            total: Int,
+            textRes: Int
+        ) {
+            ProgressNotifications.report(
+                application,
+                ProgressNotifications.Kind.UPDATE_HOSTS,
+                ProgressReporter.percentOf(completed, total),
+                application.getString(textRes, (completed + 1).coerceAtMost(total), total),
+                false
+            )
         }
 
         @Throws(HostErrorException::class)
         private fun doUpdate(application: AdAwayApplication) {
             if (PreferenceHelper.getAutomaticUpdateDaily(application)) {
-                // Started in the background, so it is notified even when the app is open.
-                ProgressNotifications.report(
-                    application, ProgressNotifications.Kind.UPDATE_HOSTS, null,
-                    null, false
-                )
                 try {
                     application.sourceModel.retrieveHostsSources { completed, total, _ ->
-                        ProgressNotifications.report(
-                            application,
-                            ProgressNotifications.Kind.UPDATE_HOSTS,
-                            ProgressReporter.percentOf(completed, total),
-                            application.getString(
-                                R.string.notification_update_host_progress_source,
-                                (completed + 1).coerceAtMost(total),
-                                total
-                            ),
-                            false
+                        reportProgress(
+                            application, completed, total,
+                            R.string.notification_update_host_progress_source
                         )
                     }
+                    ProgressNotifications.report(
+                        application,
+                        ProgressNotifications.Kind.UPDATE_HOSTS,
+                        100,
+                        application.getString(R.string.notification_update_host_progress_apply),
+                        false
+                    )
                     application.adBlockModel.apply()
                 } finally {
                     ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
                 }
             } else {
+                // The check notification must not outlive the check when no update is applied.
+                ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
                 NotificationHelper.showUpdateHostsNotification(application)
             }
         }
