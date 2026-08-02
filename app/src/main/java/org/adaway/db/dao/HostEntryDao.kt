@@ -89,9 +89,20 @@ interface HostEntryDao {
     @Query("SELECT * FROM `host_entries` WHERE `host` > :afterHost ORDER BY `host` LIMIT :limit")
     fun getEntriesAfter(afterHost: String, limit: Int): List<HostEntry>
 
+    /**
+     * Get the type a host is listed with, or `null` when it is not listed at all.
+     *
+     * Most hosts are not listed: the table only holds the blocked and the redirected ones, so the
+     * query returns no row for anything else. The return type must stay nullable, otherwise Room
+     * throws on the empty result.
+     */
     @Query("SELECT `type` FROM `host_entries` WHERE `host` == :host LIMIT 1")
-    fun getTypeOfHost(host: String): ListType
+    fun getTypeOfHost(host: String): ListType?
 
+    /**
+     * Get the type to apply to a host, defaulting to [ListType.ALLOWED] when it is not listed.
+     * Use it to decide what to do with a request, not to tell whether the host is listed.
+     */
     @Query("SELECT IFNULL((SELECT `type` FROM `host_entries` WHERE `host` == :host LIMIT 1), 1)")
     fun getTypeForHost(host: String): ListType
 

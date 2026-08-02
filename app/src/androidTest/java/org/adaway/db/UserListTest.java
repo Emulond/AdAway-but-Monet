@@ -61,6 +61,11 @@ public class UserListTest extends DbTest {
         assertNotNull(entry);
         assertEquals("ads.yahoo.com", entry.getHost());
         assertEquals(BLOCKED, entry.getType());
+        // A host that is not listed has no type at all, unlike the type to apply to it.
+        // The DNS requests screen tells the two apart to leave its actions unselected.
+        assertEquals(BLOCKED, this.hostEntryDao.getTypeOfHost("ads.yahoo.com"));
+        assertNull(this.hostEntryDao.getTypeOfHost("example.com"));
+        assertEquals(ALLOWED, this.hostEntryDao.getTypeForHost("example.com"));
     }
 
     protected void testUserAllowedHosts() throws InterruptedException {
