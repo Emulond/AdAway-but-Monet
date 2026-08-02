@@ -141,6 +141,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val allSourcesUpToDate: StateFlow<Boolean> = _allSourcesUpToDate
 
     /**
+     * Whether an update was asked for here and its outcome is still to be reported.
+     */
+    private var awaitingUpdateOutcome = false
+
+    /**
      * The enabled sources, classified into up to date and outdated.
      * Both counts come from the same list so they always add up to the number of enabled sources.
      */
@@ -161,12 +166,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Report the outcome of the update the user asked for.
+     *
+     * Only an update asked for while this screen is alive is reported. The work keeps its last
+     * result and hands it to every new observer, so without this the outcome of an update from a
+     * previous run would be announced again every time the application is opened.
      */
     private fun observeManualUpdate() {
         viewModelScope.launch {
             manualUpdate.collect { info ->
+                if (info == null || !info.state.isFinished || !awaitingUpdateOutcome) {
+                    return@collect
+                }
+                awaitingUpdateOutcome = false
                 when {
-                    info == null -> Unit
                     info.state == WorkInfo.State.SUCCEEDED -> {
                         if (info.outputData.getBoolean(SourceUpdateService.KEY_UP_TO_DATE, false)) {
                             confirmAllSourcesUpToDate()
@@ -242,6 +254,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * screen cancelled the update part way through.
      */
     fun update() {
+        awaitingUpdateOutcome = true
         SourceUpdateService.runNow(getApplication(), false)
     }
 
@@ -249,6 +262,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * Retrieve the sources unconditionally, without checking them for update first.
      */
     fun sync() {
+        awaitingUpdateOutcome = true
         SourceUpdateService.runNow(getApplication(), true)
     }
 
