@@ -46,7 +46,10 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import okhttp3.Cache;
 import okhttp3.OkHttpClient;
@@ -367,37 +370,40 @@ public class SourceModel {
         int numberOfFailedCopies = 0;
         // Compute current date in UTC timezone
         ZonedDateTime now = ZonedDateTime.now();
-        // Count the enabled sources to report progress against
         List<HostsSource> allSources = this.hostsSourceDao.getAll();
-        int enabledSourceCount = 0;
-        for (HostsSource source : allSources) {
-            if (source.isEnabled()) {
-                enabledSourceCount++;
-            }
-        }
-        int completedSourceCount = 0;
-        // Get each hosts source
+        // First pass: clear the disabled sources and work out which of the remaining ones are
+        // outdated. Their online date is fetched once here and reused below, so the progress
+        // reported afterwards counts only the sources that are actually going to be retrieved.
+        List<HostsSource> outdatedSources = new ArrayList<>();
+        Map<Integer, ZonedDateTime> onlineModificationDates = new HashMap<>();
         for (HostsSource source : allSources) {
             int sourceId = source.getId();
-            // Clear disabled source
             if (!source.isEnabled()) {
                 this.hostListItemDao.clearSourceHosts(sourceId);
                 this.hostsSourceDao.clearProperties(sourceId);
                 continue;
             }
-            listener.onSourceUpdateStarted(completedSourceCount, enabledSourceCount, source.getLabel());
-            completedSourceCount++;
-            // Get hosts source last update
+            setState(R.string.status_check_source, source.getLabel());
             ZonedDateTime onlineModificationDate = getHostsSourceLastUpdate(source);
             if (onlineModificationDate == null) {
                 onlineModificationDate = now;
             }
-            // Check if update available
+            onlineModificationDates.put(sourceId, onlineModificationDate);
             ZonedDateTime localModificationDate = source.getLocalModificationDate();
             if (localModificationDate != null && localModificationDate.isAfter(onlineModificationDate)) {
                 Timber.i("Skip source %s: no update.", source.getLabel());
                 continue;
             }
+            outdatedSources.add(source);
+        }
+        int outdatedSourceCount = outdatedSources.size();
+        int completedSourceCount = 0;
+        // Second pass: retrieve the outdated sources
+        for (HostsSource source : outdatedSources) {
+            int sourceId = source.getId();
+            ZonedDateTime onlineModificationDate = onlineModificationDates.get(sourceId);
+            listener.onSourceUpdateStarted(completedSourceCount, outdatedSourceCount, source.getLabel());
+            completedSourceCount++;
             // Increment number of copy
             numberOfCopies++;
             try {
@@ -512,7 +518,7 @@ public class SourceModel {
         String hostsFileUrl = source.getUrl();
         Timber.v("Downloading hosts file: %s.", hostsFileUrl);
         // Set state to downloading hosts source
-        setState(R.string.status_download_source, hostsFileUrl);
+        setState(R.string.status_download_source, source.getLabel());
         // Create request
         Request request = getRequestFor(source).build();
         // Request hosts file and open byte stream
@@ -551,7 +557,7 @@ public class SourceModel {
         Uri fileUri = Uri.parse(hostsFileUrl);
         Timber.v("Reading hosts source file: %s.", hostsFileUrl);
         // Set state to copying hosts source
-        setState(R.string.status_read_source, hostsFileUrl);
+        setState(R.string.status_read_source, hostsSource.getLabel());
         try (InputStream inputStream = this.context.getContentResolver().openInputStream(fileUri);
              InputStreamReader reader = new InputStreamReader(inputStream);
              BufferedReader bufferedReader = new BufferedReader(reader)) {
