@@ -40,8 +40,11 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -74,11 +77,13 @@ class TcpdumpUtils {
      * recognised by them.
      *
      * The first set asks for a dated timestamp on every line, so each request can be shown with
-     * the time it was made. The second drops timestamps altogether and is only used if a capture
-     * program does not understand the request, so an unusual one still records the host names.
+     * the time it was made. The second leaves the capture to timestamp lines its own way, and the
+     * third drops timestamps altogether; they are only used if a capture program does not
+     * understand what comes before, so an unusual one still records the host names.
      */
     private static final String[] CAPTURE_ARGUMENT_VARIANTS = {
             "-i any -p -l -v -tttt -s 512 'udp dst port 53'",
+            "-i any -p -l -v -s 512 'udp dst port 53'",
             "-i any -p -l -v -t -s 512 'udp dst port 53'"
     };
     /**
@@ -101,9 +106,14 @@ class TcpdumpUtils {
     /**
      * Recognises the dated timestamp starting a capture line, ignoring its fraction of a second.
      */
-    private static final Pattern TCPDUMP_TIME_PATTERN =
+    private static final Pattern TCPDUMP_DATE_TIME_PATTERN =
             Pattern.compile("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})");
-    private static final DateTimeFormatter TCPDUMP_TIME_FORMATTER =
+    /**
+     * Recognises the time of day starting a capture line that carries no date.
+     */
+    private static final Pattern TCPDUMP_TIME_PATTERN =
+            Pattern.compile("^(\\d{2}:\\d{2}:\\d{2})");
+    private static final DateTimeFormatter TCPDUMP_DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
@@ -146,6 +156,11 @@ class TcpdumpUtils {
             Timber.e(e, "Problem while getting cache directory!");
             return context.getString(R.string.dns_recording_error_log_file, file.getAbsolutePath());
         }
+
+        // Take over from any capture already running: it may have been started by an earlier
+        // version of the application, with arguments that record no time, and leaving it alone
+        // would look like a capture that started but never timestamps anything.
+        stopTcpdump();
 
         StringBuilder attempts = new StringBuilder();
         for (String candidate : captureCandidates(context)) {
@@ -455,16 +470,35 @@ class TcpdumpUtils {
      * @return The time of the line, or {@code null} if it carries none.
      */
     private static Instant getTcpdumpTime(String input) {
-        Matcher matcher = TCPDUMP_TIME_PATTERN.matcher(input);
-        if (!matcher.find()) {
-            return null;
-        }
         try {
-            return LocalDateTime.parse(matcher.group(1), TCPDUMP_TIME_FORMATTER)
-                    .atZone(ZoneId.systemDefault())
-                    .toInstant();
+            Matcher dated = TCPDUMP_DATE_TIME_PATTERN.matcher(input);
+            if (dated.find()) {
+                return LocalDateTime.parse(dated.group(1), TCPDUMP_DATE_TIME_FORMATTER)
+                        .atZone(ZoneId.systemDefault())
+                        .toInstant();
+            }
+            Matcher timeOnly = TCPDUMP_TIME_PATTERN.matcher(input);
+            if (timeOnly.find()) {
+                return atMostRecentOccurrence(LocalTime.parse(timeOnly.group(1)));
+            }
         } catch (DateTimeParseException exception) {
-            return null;
+            Timber.d("Unreadable timestamp in the DNS request log: %s.", input);
         }
+        return null;
+    }
+
+    /**
+     * Place a time of day on the day it last occurred.
+     *
+     * A capture that timestamps its lines with the time alone leaves the date out. Today is the
+     * answer for all but the lines written before midnight and read after it, which would
+     * otherwise be dated in the future.
+     */
+    private static Instant atMostRecentOccurrence(LocalTime time) {
+        ZoneId zone = ZoneId.systemDefault();
+        ZonedDateTime today = time.atDate(LocalDate.now(zone)).atZone(zone);
+        return today.isAfter(ZonedDateTime.now(zone))
+                ? today.minusDays(1).toInstant()
+                : today.toInstant();
     }
 }
