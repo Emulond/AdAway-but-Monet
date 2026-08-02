@@ -11,6 +11,9 @@
     <string name="notification_update_host_progress_text">Downloading and applying source updates…</string>
     <string name="notification_update_host_progress_source">Source %1$d of %2$d: %3$s</string>
     <string name="notification_update_app_progress_title">Downloading AdAway update</string>
+    <!-- Configuration application notification -->
+    <string name="notification_apply_configuration_title">Applying configuration</string>
+    <string name="notification_apply_configuration_text">Writing the hosts file…</string>
     <!-- DNS recording notification -->
     <string name="notification_dns_recording_channel_name">DNS recording</string>
     <string name="notification_dns_recording_channel_description">DNS request recording notifications</string>

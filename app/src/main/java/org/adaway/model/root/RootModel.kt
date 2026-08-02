@@ -153,6 +153,8 @@ class RootModel(context: Context) : AdBlockModel(context) {
             return
         }
         deleteNewHostsFile()
+        // Only the regeneration is worth reporting: reusing the file is immediate.
+        NotificationHelper.showApplyConfigurationProgressNotification(this.context, 0)
         try {
             BufferedWriter(OutputStreamWriter(this.context.openFileOutput(HOSTS_FILENAME, MODE_PRIVATE))).use { writer ->
                 writeHostsHeader(writer, fingerprint)
@@ -161,6 +163,8 @@ class RootModel(context: Context) : AdBlockModel(context) {
             }
         } catch (exception: IOException) {
             throw HostErrorException(PRIVATE_FILE_FAILED, exception)
+        } finally {
+            NotificationHelper.clearApplyConfigurationNotification(this.context)
         }
     }
 
@@ -243,10 +247,14 @@ class RootModel(context: Context) : AdBlockModel(context) {
 
         // Read the entries in pages: materialising millions of them at once was a large
         // allocation spike for no benefit, since each one is written and then discarded.
+        val progress = ProgressReporter(this.hostEntryDao.count) { percent ->
+            NotificationHelper.showApplyConfigurationProgressNotification(this.context, percent)
+        }
         HostEntryPager.forEachEntry(
             fetch = { afterHost, limit -> this.hostEntryDao.getEntriesAfter(afterHost, limit) },
             hostOf = { it.host },
             action = { entry ->
+                progress.increment()
                 val hostname = entry.host
                 if (entry.type == REDIRECTED) {
                     writer.write("${entry.redirection} $hostname")

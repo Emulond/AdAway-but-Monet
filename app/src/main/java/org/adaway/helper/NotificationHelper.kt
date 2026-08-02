@@ -22,6 +22,7 @@ object NotificationHelper {
     private const val UPDATE_HOSTS_PROGRESS_NOTIFICATION_ID = 16
     private const val UPDATE_APP_PROGRESS_NOTIFICATION_ID = 17
     private const val DNS_RECORDING_NOTIFICATION_ID = 18
+    private const val APPLY_CONFIGURATION_NOTIFICATION_ID = 19
     
     @JvmField
     val VPN_RUNNING_SERVICE_NOTIFICATION_ID = 20
@@ -63,6 +64,39 @@ object NotificationHelper {
         notificationManager.createNotificationChannel(updateChannel)
         notificationManager.createNotificationChannel(vpnServiceChannel)
         notificationManager.createNotificationChannel(dnsRecordingChannel)
+    }
+
+    /**
+     * Show the progress of a configuration being applied.
+     *
+     * @param percent The share of the hosts file already written, between 0 and 100.
+     */
+    @JvmStatic
+    fun showApplyConfigurationProgressNotification(context: Context, percent: Int) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
+        if (notificationManager == null || !notificationManager.areNotificationsEnabled()) {
+            return
+        }
+
+        val builder = buildUpdateProgressNotification(
+            context = context,
+            notificationManager = notificationManager,
+            title = context.getString(R.string.notification_apply_configuration_title),
+            text = context.getString(R.string.notification_apply_configuration_text),
+            progress = percent.coerceIn(0, 100),
+            route = AdAwayRoute.HOME
+        )
+
+        notificationManager.notify(APPLY_CONFIGURATION_NOTIFICATION_ID, builder.build())
+    }
+
+    /**
+     * Clear the configuration application notification.
+     */
+    @JvmStatic
+    fun clearApplyConfigurationNotification(context: Context) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        notificationManager.cancel(APPLY_CONFIGURATION_NOTIFICATION_ID)
     }
 
     /**
