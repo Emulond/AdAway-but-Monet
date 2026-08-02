@@ -2,10 +2,8 @@ package org.adaway.ui.log
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
@@ -258,6 +257,11 @@ private fun LogScreen(
                     indicatorVisible = false
                 }
             }
+            val indicatorAlpha by animateFloatAsState(
+                targetValue = if (indicatorVisible) 1f else 0f,
+                animationSpec = tween(200),
+                label = "refreshIndicatorAlpha"
+            )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -265,12 +269,12 @@ private fun LogScreen(
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                AnimatedVisibility(
-                    visible = indicatorVisible,
-                    enter = fadeIn(animationSpec = tween(200)),
-                    exit = fadeOut(animationSpec = tween(200))
-                ) {
-                    WavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+                if (indicatorAlpha > 0f) {
+                    WavyProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(indicatorAlpha)
+                    )
                 }
             }
 
