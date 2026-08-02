@@ -703,9 +703,10 @@ private fun HomeMetricCard(
     onClick: () -> Unit
 ) {
     ExpressiveSection(
-        modifier = modifier.safeClickable(onClick = onClick),
+        modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        shape = shape
+        shape = shape,
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier
@@ -766,11 +767,10 @@ private fun SourceStatusSection(
     onCheckSources: () -> Unit
 ) {
     ExpressiveSection(
-        modifier = Modifier
-            .padding(top = 16.dp)
-            .safeClickable(onClick = onOpenSources),
+        modifier = Modifier.padding(top = 16.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        shape = ExpressiveAsymmetricShape2
+        shape = ExpressiveAsymmetricShape2,
+        onClick = onOpenSources
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Row(
@@ -896,9 +896,10 @@ private fun HomeQuickActionCard(
     onClick: () -> Unit
 ) {
     ExpressiveSection(
-        modifier = modifier.safeClickable(onClick = onClick),
+        modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        shape = shape
+        shape = shape,
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier

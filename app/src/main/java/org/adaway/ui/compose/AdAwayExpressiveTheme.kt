@@ -455,26 +455,48 @@ fun ExpressivePage(
     )
 }
 
+/**
+ * A card-shaped block of content.
+ *
+ * Pass [onClick] rather than making the caller's modifier clickable: the card draws the pressed
+ * highlight inside its own shape, so it stays within the rounded corners instead of spilling over
+ * them and over the spacing around the card.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpressiveSection(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     shape: Shape = MaterialTheme.shapes.extraLarge,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        shape = shape,
-        content = content
+    val colors = CardDefaults.cardColors(
+        containerColor = containerColor,
+        contentColor = MaterialTheme.colorScheme.onSurface
     )
+    val cardModifier = modifier
+        .fillMaxWidth()
+        .padding(vertical = 8.dp)
+    if (onClick == null) {
+        Card(
+            modifier = cardModifier,
+            colors = colors,
+            shape = shape,
+            content = content
+        )
+    } else {
+        Card(
+            onClick = onClick,
+            modifier = cardModifier,
+            colors = colors,
+            shape = shape,
+            content = content
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpressiveSelectorButton(
     label: String,
@@ -485,9 +507,8 @@ fun ExpressiveSelectorButton(
 ) {
     val arrowColor = MaterialTheme.colorScheme.onSurfaceVariant
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .safeClickable(onClick = onClick),
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
         shape = ExpressiveAsymmetricShape1,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh

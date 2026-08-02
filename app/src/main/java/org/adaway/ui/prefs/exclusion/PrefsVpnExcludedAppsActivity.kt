@@ -47,7 +47,6 @@ import org.adaway.ui.compose.ExpressiveAsymmetricShape2
 import org.adaway.ui.compose.ExpressiveScaffold
 import org.adaway.ui.compose.ExpressiveSection
 import org.adaway.ui.compose.ExpressiveTopBar
-import org.adaway.ui.compose.safeClickable
 
 @Composable
 internal fun VpnExcludedAppsRoute(onNavigateBack: () -> Unit) {
@@ -174,9 +173,9 @@ private fun UserAppCard(
     onToggle: (Boolean) -> Unit
 ) {
     ExpressiveSection(
-        modifier = Modifier.safeClickable { onToggle(!application.excluded) },
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        shape = shape
+        shape = shape,
+        onClick = { onToggle(!application.excluded) }
     ) {
         val iconSizeDp = 40.dp
         val iconSizePx = with(LocalDensity.current) { iconSizeDp.roundToPx() }

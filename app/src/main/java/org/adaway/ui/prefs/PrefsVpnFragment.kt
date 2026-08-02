@@ -20,7 +20,6 @@ import org.adaway.R
 import org.adaway.ui.compose.ExpressiveAsymmetricShape1
 import org.adaway.ui.compose.ExpressiveAsymmetricShape2
 import org.adaway.ui.compose.ExpressivePage
-import org.adaway.ui.compose.safeClickable
 import org.adaway.ui.compose.ExpressiveSelectionBottomSheet
 
 @Composable

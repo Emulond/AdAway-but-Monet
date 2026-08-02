@@ -99,9 +99,10 @@ fun ExpressiveActionCard(
     icon: @Composable RowScope.() -> Unit
 ) {
     ExpressiveSection(
-        modifier = modifier.safeClickable(onClick = onClick),
+        modifier = modifier,
         containerColor = containerColor,
-        shape = shape
+        shape = shape,
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier

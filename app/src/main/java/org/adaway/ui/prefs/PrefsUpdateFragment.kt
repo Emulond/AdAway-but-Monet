@@ -144,7 +144,7 @@ internal fun PrefsUpdateScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .safeClickable {
+                                    .safeClickable(shape = MaterialTheme.shapes.small) {
                                         onUpdateIntervalChanged(hours)
                                         intervalPickerVisible = false
                                     }

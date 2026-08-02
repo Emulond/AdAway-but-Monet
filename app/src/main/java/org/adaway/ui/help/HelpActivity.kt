@@ -55,7 +55,6 @@ import org.adaway.ui.compose.ExpressiveTopBar
 import org.adaway.ui.compose.ExpressiveSection
 import org.adaway.ui.compose.ExpressiveAsymmetricShape1
 import org.adaway.ui.compose.ExpressiveAsymmetricShape2
-import org.adaway.ui.compose.safeClickable
 import org.adaway.ui.compose.ExpressiveSelectorButton
 import org.adaway.ui.compose.ExpressiveSelectionBottomSheet
 import java.io.BufferedReader

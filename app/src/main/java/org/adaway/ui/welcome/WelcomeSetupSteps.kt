@@ -42,6 +42,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -453,7 +454,7 @@ fun WelcomeSyncStep(
                         verticalArrangement = Arrangement.Center,
                         modifier = Modifier
                             .padding(top = 24.dp)
-                            .safeClickable(onClick = onRetry)
+                            .safeClickable(shape = MaterialTheme.shapes.large, onClick = onRetry)
                     ) {
                         ExpressiveIconBadge(
                             iconRes = R.drawable.ic_sync_24dp,
@@ -614,7 +615,9 @@ fun WelcomeSupportStep(onCanProceedChange: (Boolean) -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 16.dp)
-                            .safeClickable { onTelemetryChanged(!telemetryEnabled) },
+                            .safeClickable(shape = MaterialTheme.shapes.medium) {
+                                onTelemetryChanged(!telemetryEnabled)
+                            },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -637,6 +640,7 @@ fun WelcomeSupportStep(onCanProceedChange: (Boolean) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WelcomeMethodCard(
     modifier: Modifier = Modifier,
@@ -658,7 +662,8 @@ private fun WelcomeMethodCard(
     )
 
     Card(
-        modifier = modifier.safeClickable(onClick = onClick),
+        onClick = onClick,
+        modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = containerColor),
         shape = shape
     ) {

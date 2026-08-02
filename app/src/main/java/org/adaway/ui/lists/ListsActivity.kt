@@ -450,24 +450,24 @@ private fun HostListRow(
 
     Box {
         ExpressiveSection(
-            modifier = Modifier
-                .fillMaxWidth()
-                .safeCombinedClickable(
-                    onClick = {},
-                    onLongClick = {
-                        if (editable) {
-                            menuExpanded = true
-                        } else {
-                            onCopyHost(host)
-                        }
-                    }
-                ),
+            modifier = Modifier.fillMaxWidth(),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             shape = shape
         ) {
             Row(
+                // Pressed inside the card, so its highlight follows the rounded corners.
                 modifier = Modifier
                     .fillMaxWidth()
+                    .safeCombinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            if (editable) {
+                                menuExpanded = true
+                            } else {
+                                onCopyHost(host)
+                            }
+                        }
+                    )
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

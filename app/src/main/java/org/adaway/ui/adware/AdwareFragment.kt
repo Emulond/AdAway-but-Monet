@@ -1,6 +1,5 @@
 package org.adaway.ui.adware
 
-import org.adaway.ui.compose.safeClickable
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -102,10 +101,9 @@ private fun AdwareInstallItem(
     val packageName = install[AdwareInstall.PACKAGE_NAME_KEY].orEmpty()
     
     ExpressiveSection(
-        modifier = Modifier
-            .padding(vertical = 6.dp)
-            .safeClickable(onClick = onClick),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        modifier = Modifier.padding(vertical = 6.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        onClick = onClick
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
             Text(

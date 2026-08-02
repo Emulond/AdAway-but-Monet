@@ -43,7 +43,6 @@ import org.adaway.ui.compose.ExpressiveScaffold
 import org.adaway.ui.compose.ExpressiveSection
 import org.adaway.ui.compose.ExpressiveStatusDot
 import org.adaway.ui.compose.ExpressiveTopBar
-import org.adaway.ui.compose.safeClickable
 import java.time.Duration
 import java.time.ZonedDateTime
 import kotlin.math.pow
@@ -211,9 +210,9 @@ private fun HostsSourceCard(
     }
 
     ExpressiveSection(
-        modifier = Modifier.safeClickable(onClick = onEdit),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        shape = shape
+        shape = shape,
+        onClick = onEdit
     ) {
         Row(
             modifier = Modifier
