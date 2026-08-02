@@ -265,7 +265,10 @@
     <string name="dns_recording_error_no_root">Root access was not granted to AdAway.</string>
     <string name="dns_recording_error_missing">The capture program is missing from the installation: %1$s</string>
     <string name="dns_recording_error_log_file">The log file could not be created: %1$s</string>
-    <string name="dns_recording_error_start">The capture program could not be started.</string>
+    <string name="dns_recording_error_start">The capture program could not be started (%1$s).</string>
     <string name="dns_recording_error_exited">The capture stopped immediately. It reported: %1$s</string>
-    <string name="dns_recording_error_no_output">no output</string>
+    <string name="dns_recording_error_no_output">nothing. The shell reported %1$s, and the process list says: %2$s</string>
+    <string name="dns_recording_error_no_process">no matching process</string>
+    <string name="dns_recording_warning_title">DNS recording started, but names will be hidden</string>
+    <string name="dns_recording_warning_private_dns">Private DNS is enabled (%1$s), so DNS requests leave this device encrypted. The capture can see that requests happen but cannot read the host names. Turn Private DNS off in the Android network settings to record them.</string>
 </resources>

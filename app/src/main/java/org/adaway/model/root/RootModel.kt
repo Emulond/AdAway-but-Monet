@@ -99,7 +99,12 @@ class RootModel(context: Context) : AdBlockModel(context) {
     @Volatile
     private var recordingFailure: String? = null
 
+    @Volatile
+    private var recordingWarning: String? = null
+
     override fun getRecordingFailure(): String? = this.recordingFailure
+
+    override fun getRecordingWarning(): String? = this.recordingWarning
 
     override fun setRecordingLogs(recording: Boolean) {
         if (recording) {
@@ -108,6 +113,8 @@ class RootModel(context: Context) : AdBlockModel(context) {
             // is indistinguishable from the toggle not working.
             val failure = TcpdumpUtils.startTcpdump(this.context)
             this.recordingFailure = failure
+            this.recordingWarning =
+                if (failure == null) TcpdumpUtils.getEncryptedDnsWarning(this.context) else null
             if (failure == null) {
                 NotificationHelper.showDnsRecordingNotification(this.context)
             } else {
@@ -116,6 +123,7 @@ class RootModel(context: Context) : AdBlockModel(context) {
             }
         } else {
             this.recordingFailure = null
+            this.recordingWarning = null
             TcpdumpUtils.stopTcpdump()
             NotificationHelper.clearDnsRecordingNotification(this.context)
         }

@@ -136,6 +136,15 @@ public abstract class AdBlockModel {
     }
 
     /**
+     * Get a limitation worth reporting about the running recording.
+     *
+     * @return The warning, or {@code null} when there is nothing to report.
+     */
+    public String getRecordingWarning() {
+        return null;
+    }
+
+    /**
      * Get logs.
      *
      * @return The logs unique and sorted by date, older first.

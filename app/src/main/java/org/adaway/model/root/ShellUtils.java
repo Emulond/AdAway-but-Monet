@@ -52,12 +52,43 @@ public final class ShellUtils {
         return result.isSuccess();
     }
 
-    public static boolean runBundledExecutable(Context context, String executable, String parameters) {
+    public static Shell.Result runBundledExecutable(Context context, String executable, String parameters) {
         String nativeLibraryDir = context.getApplicationInfo().nativeLibraryDir;
         String command = "LD_LIBRARY_PATH=" + nativeLibraryDir + " " +
-                nativeLibraryDir + File.separator + EXECUTABLE_PREFIX + executable + EXECUTABLE_SUFFIX + " " +
+                nativeLibraryDir + File.separator + getExecutableName(executable) + " " +
                 parameters + " &";
-        return Shell.cmd(command).exec().isSuccess();
+        return Shell.cmd(command).exec();
+    }
+
+    /**
+     * Describe a shell result, for reporting why a command did not do what was expected.
+     *
+     * @param result The result to describe.
+     * @return The exit code and whatever the command printed.
+     */
+    public static String describe(Shell.Result result) {
+        String output = mergeAllLines(result.getOut()).trim();
+        String error = mergeAllLines(result.getErr()).trim();
+        StringBuilder builder = new StringBuilder("exit code ").append(result.getCode());
+        if (!error.isEmpty()) {
+            builder.append(": ").append(error);
+        } else if (!output.isEmpty()) {
+            builder.append(": ").append(output);
+        }
+        return builder.toString();
+    }
+
+    /**
+     * List the processes matching a bundled executable, to tell a capture that never started from
+     * one that is running but not being detected.
+     *
+     * @param executable The bundled executable name.
+     * @return The matching process lines, or an empty string when there are none.
+     */
+    public static String listBundledExecutableProcesses(String executable) {
+        String name = getExecutableName(executable);
+        Shell.Result result = Shell.cmd("ps -A -o PID,ARGS | grep " + escapedString(truncateToProcessName(name))).exec();
+        return mergeAllLines(result.getOut()).trim();
     }
 
     public static void killBundledExecutable(String executable) {

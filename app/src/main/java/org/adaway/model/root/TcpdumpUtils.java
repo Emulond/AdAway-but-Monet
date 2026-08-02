@@ -21,10 +21,15 @@
 package org.adaway.model.root;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.os.Build;
 
 import org.adaway.R;
 
 import com.topjohnwu.superuser.Shell;
+
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -119,8 +124,9 @@ class TcpdumpUtils {
         // "-s 0": capture first 512 bit of packet to get DNS content
         String parameters = "-i any -p -l -v -t -s 512 'udp dst port 53' >> " + file + " 2>&1";
 
-        if (!runBundledExecutable(context, TCPDUMP_EXECUTABLE, parameters)) {
-            return context.getString(R.string.dns_recording_error_start);
+        Shell.Result startResult = runBundledExecutable(context, TCPDUMP_EXECUTABLE, parameters);
+        if (!startResult.isSuccess()) {
+            return context.getString(R.string.dns_recording_error_start, ShellUtils.describe(startResult));
         }
         // The executable is backgrounded by the shell, so a successful command only means it was
         // launched. Give it a moment and check it is still alive, otherwise a tcpdump that exits
@@ -133,12 +139,20 @@ class TcpdumpUtils {
         if (isTcpdumpRunning()) {
             return null;
         }
-        // Anything tcpdump printed before dying was redirected to the log file.
+        // Anything tcpdump printed before dying was redirected to the log file. When that is empty
+        // the process left no trace, so also report what the launching shell said and whether any
+        // matching process exists, which separates a capture that never ran from one that runs but
+        // is not being detected.
         String output = readLogFileTail(context);
-        Timber.w("Tcpdump exited right after being started. Log file content: %s", output);
-        return context.getString(
-                R.string.dns_recording_error_exited,
-                output.isEmpty() ? context.getString(R.string.dns_recording_error_no_output) : output);
+        if (output.isEmpty()) {
+            String processes = ShellUtils.listBundledExecutableProcesses(TCPDUMP_EXECUTABLE);
+            output = context.getString(
+                    R.string.dns_recording_error_no_output,
+                    ShellUtils.describe(startResult),
+                    processes.isEmpty() ? context.getString(R.string.dns_recording_error_no_process) : processes);
+        }
+        Timber.w("Tcpdump exited right after being started: %s", output);
+        return context.getString(R.string.dns_recording_error_exited, output);
     }
 
     /**
@@ -155,6 +169,39 @@ class TcpdumpUtils {
         } catch (IOException | RuntimeException e) {
             return "";
         }
+    }
+
+    /**
+     * Tell whether encrypted DNS hides the requested host names from the capture.
+     *
+     * The capture reads plain DNS on port 53. With Private DNS the requests leave the device over
+     * TLS, so the packets carry no readable host name and the log stays empty however well the
+     * capture runs.
+     *
+     * @param context The application context.
+     * @return The warning to report, or {@code null} when plain DNS is in use.
+     */
+    static String getEncryptedDnsWarning(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return null;
+        }
+        ConnectivityManager connectivityManager =
+                (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager == null) {
+            return null;
+        }
+        Network network = connectivityManager.getActiveNetwork();
+        if (network == null) {
+            return null;
+        }
+        LinkProperties linkProperties = connectivityManager.getLinkProperties(network);
+        if (linkProperties == null || !linkProperties.isPrivateDnsActive()) {
+            return null;
+        }
+        String serverName = linkProperties.getPrivateDnsServerName();
+        return context.getString(
+                R.string.dns_recording_warning_private_dns,
+                serverName == null ? "automatic" : serverName);
     }
 
     /**

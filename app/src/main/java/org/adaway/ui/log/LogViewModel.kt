@@ -1,6 +1,7 @@
 package org.adaway.ui.log
 
 import android.app.Application
+import androidx.annotation.StringRes
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.adaway.AdAwayApplication
+import org.adaway.R
 import org.adaway.db.AppDatabase
 import org.adaway.db.dao.HostEntryDao
 import org.adaway.db.dao.HostListItemDao
@@ -19,6 +21,11 @@ import org.adaway.db.entity.ListType
 import org.adaway.model.adblocking.AdBlockMethod
 import org.adaway.model.adblocking.AdBlockModel
 import org.adaway.util.ExpressiveToast
+
+/**
+ * A message about the last recording attempt: why it failed, or a limitation of the running one.
+ */
+data class RecordingMessage(@StringRes val titleRes: Int, val text: String)
 
 class LogViewModel(application: Application) : AndroidViewModel(application) {
     private val adBlockModel: AdBlockModel = (application as AdAwayApplication).adBlockModel
@@ -33,8 +40,8 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
     val recording: StateFlow<Boolean> = _recording
 
 
-    private val _recordingFailure = MutableStateFlow<String?>(null)
-    val recordingFailure: StateFlow<String?> = _recordingFailure
+    private val _recordingMessage = MutableStateFlow<RecordingMessage?>(null)
+    val recordingMessage: StateFlow<RecordingMessage?> = _recordingMessage
 
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
@@ -56,8 +63,17 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
 
     fun areBlockedRequestsIgnored(): Boolean = adBlockModel.method == AdBlockMethod.ROOT
 
-    fun dismissRecordingFailure() {
-        _recordingFailure.value = null
+    private fun buildRecordingMessage(): RecordingMessage? {
+        if (!_recording.value) {
+            val failure = adBlockModel.recordingFailure ?: return null
+            return RecordingMessage(R.string.dns_recording_error_title, failure)
+        }
+        val warning = adBlockModel.recordingWarning ?: return null
+        return RecordingMessage(R.string.dns_recording_warning_title, warning)
+    }
+
+    fun dismissRecordingMessage() {
+        _recordingMessage.value = null
     }
 
     fun clearLogs() {
@@ -100,7 +116,7 @@ class LogViewModel(application: Application) : AndroidViewModel(application) {
                 adBlockModel.setRecordingLogs(enable)
                 adBlockModel.isRecordingLogs
             }
-            _recordingFailure.value = if (_recording.value) null else adBlockModel.recordingFailure
+            _recordingMessage.value = buildRecordingMessage()
         }
     }
 
