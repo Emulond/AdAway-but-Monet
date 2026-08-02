@@ -47,13 +47,16 @@ import static java.util.Collections.emptyList;
 import static org.adaway.model.root.ShellUtils.isBundledExecutableRunning;
 import static org.adaway.model.root.ShellUtils.killBundledExecutable;
 import static org.adaway.model.root.ShellUtils.mergeAllLines;
-import static org.adaway.model.root.ShellUtils.runBundledExecutable;
 
 import timber.log.Timber;
 
 class TcpdumpUtils {
     private static final String TCPDUMP_EXECUTABLE = "tcpdump";
     private static final String TCPDUMP_LOG = "dns_log.txt";
+    /**
+     * A directory the privileged shell can both write to and execute from.
+     */
+    private static final String SHELL_TEMPORARY_DIRECTORY = "/data/local/tmp";
     private static final String TCPDUMP_HOSTNAME_REGEX = "(?:A\\?|AAAA\\?)\\s(\\S+)\\.\\s";
     /**
      * The delay before checking the capture is still alive, in milliseconds.
@@ -96,12 +99,19 @@ class TcpdumpUtils {
             return context.getString(R.string.dns_recording_error_no_root);
         }
 
-        // The capture runs the executable bundled in the native library directory.
-        File executable = new File(
-                context.getApplicationInfo().nativeLibraryDir,
-                ShellUtils.getExecutableName(TCPDUMP_EXECUTABLE));
-        if (!executable.exists()) {
-            return context.getString(R.string.dns_recording_error_missing, executable.getAbsolutePath());
+        String libraryDir = context.getApplicationInfo().nativeLibraryDir;
+        String bundled = libraryDir + File.separator + ShellUtils.getExecutableName(TCPDUMP_EXECUTABLE);
+        if (!new File(bundled).exists()) {
+            return context.getString(R.string.dns_recording_error_missing, bundled);
+        }
+
+        // Resolve somewhere the capture can actually be executed from. Running it where it is
+        // installed is preferred, but the shell is not always permitted to execute a file owned by
+        // the application, in which case a copy in the shell's own temporary directory works.
+        StringBuilder attempts = new StringBuilder();
+        String executable = firstRunnable(libraryDir, bundled, attempts);
+        if (executable == null) {
+            return context.getString(R.string.dns_recording_error_not_runnable, attempts.toString());
         }
 
         File file = getLogFile(context);
@@ -121,16 +131,15 @@ class TcpdumpUtils {
         // capturing it.
         // "-v": verbose
         // "-t": don't print a timestamp
-        // "-s 0": capture first 512 bit of packet to get DNS content
-        String parameters = "-i any -p -l -v -t -s 512 'udp dst port 53' >> " + file + " 2>&1";
-
-        Shell.Result startResult = runBundledExecutable(context, TCPDUMP_EXECUTABLE, parameters);
+        // "-s 512": capture enough of the packet to get DNS content
+        String command = "LD_LIBRARY_PATH=" + libraryDir + " " + executable +
+                " -i any -p -l -v -t -s 512 'udp dst port 53' >> " + file + " 2>&1 &";
+        Shell.Result startResult = Shell.cmd(command).exec();
         if (!startResult.isSuccess()) {
             return context.getString(R.string.dns_recording_error_start, ShellUtils.describe(startResult));
         }
-        // The executable is backgrounded by the shell, so a successful command only means it was
-        // launched. Give it a moment and check it is still alive, otherwise a tcpdump that exits
-        // straight away is reported as a running capture.
+        // The capture is backgrounded by the shell, so a successful command only means it was
+        // launched. Give it a moment and check it is still alive.
         try {
             Thread.sleep(START_CHECK_DELAY_MS);
         } catch (InterruptedException e) {
@@ -139,10 +148,7 @@ class TcpdumpUtils {
         if (isTcpdumpRunning()) {
             return null;
         }
-        // Anything tcpdump printed before dying was redirected to the log file. When that is empty
-        // the process left no trace, so also report what the launching shell said and whether any
-        // matching process exists, which separates a capture that never ran from one that runs but
-        // is not being detected.
+
         String output = readLogFileTail(context);
         if (output.isEmpty()) {
             String processes = ShellUtils.listBundledExecutableProcesses(TCPDUMP_EXECUTABLE);
@@ -153,6 +159,44 @@ class TcpdumpUtils {
         }
         Timber.w("Tcpdump exited right after being started: %s", output);
         return context.getString(R.string.dns_recording_error_exited, output);
+    }
+
+    /**
+     * Find a path the capture can be executed from.
+     *
+     * Each candidate is tried by running it and reading its version, which fails loudly when the
+     * shell cannot execute it rather than silently at capture time.
+     *
+     * @param libraryDir The directory holding the libraries the capture links against.
+     * @param bundled The capture as installed with the application.
+     * @param attempts Collects what each rejected candidate reported.
+     * @return A runnable path, or {@code null} when none of them ran.
+     */
+    private static String firstRunnable(String libraryDir, String bundled, StringBuilder attempts) {
+        Shell.Result bundledResult = Shell.cmd(
+                "LD_LIBRARY_PATH=" + libraryDir + " " + bundled + " --version").exec();
+        if (bundledResult.isSuccess()) {
+            return bundled;
+        }
+        attempts.append(bundled).append(" -> ").append(ShellUtils.describe(bundledResult));
+
+        // Keep the same file name so the running capture is still recognised by name.
+        String copy = SHELL_TEMPORARY_DIRECTORY + File.separator
+                + ShellUtils.getExecutableName(TCPDUMP_EXECUTABLE);
+        Shell.Result copyResult = Shell.cmd(
+                "cp -f " + bundled + " " + copy + " && chmod 700 " + copy).exec();
+        if (!copyResult.isSuccess()) {
+            attempts.append("; ").append(copy).append(" -> ").append(ShellUtils.describe(copyResult));
+            return null;
+        }
+        Shell.Result copyRunResult = Shell.cmd(
+                "LD_LIBRARY_PATH=" + libraryDir + " " + copy + " --version").exec();
+        if (copyRunResult.isSuccess()) {
+            Timber.i("Running the capture from %s.", copy);
+            return copy;
+        }
+        attempts.append("; ").append(copy).append(" -> ").append(ShellUtils.describe(copyRunResult));
+        return null;
     }
 
     /**

@@ -87,7 +87,9 @@ public final class ShellUtils {
      */
     public static String listBundledExecutableProcesses(String executable) {
         String name = getExecutableName(executable);
-        Shell.Result result = Shell.cmd("ps -A -o PID,ARGS | grep " + escapedString(truncateToProcessName(name))).exec();
+        Shell.Result result = Shell.cmd(
+                "ps -A -o PID,ARGS | grep " + escapedString(selfExcludingPattern(truncateToProcessName(name)))
+        ).exec();
         return mergeAllLines(result.getOut()).trim();
     }
 
@@ -118,7 +120,7 @@ public final class ShellUtils {
      * @param name The name to turn into a pattern.
      * @return The related pattern.
      */
-    private static String selfExcludingPattern(String name) {
+    static String selfExcludingPattern(String name) {
         return "[" + name.charAt(0) + "]" + name.substring(1);
     }
 
