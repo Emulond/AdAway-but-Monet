@@ -10,6 +10,9 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import org.adaway.AdAwayApplication
 import org.adaway.helper.NotificationHelper
+import org.adaway.helper.ProgressNotifications
+import org.adaway.model.root.ProgressReporter
+import org.adaway.R
 import org.adaway.helper.PreferenceHelper
 import org.adaway.model.error.HostErrorException
 import timber.log.Timber
@@ -90,19 +93,28 @@ object SourceUpdateService {
         @Throws(HostErrorException::class)
         private fun doUpdate(application: AdAwayApplication) {
             if (PreferenceHelper.getAutomaticUpdateDaily(application)) {
-                NotificationHelper.showUpdateHostsProgressNotification(application)
+                // Started in the background, so it is notified even when the app is open.
+                ProgressNotifications.report(
+                    application, ProgressNotifications.Kind.UPDATE_HOSTS, null,
+                    null, false
+                )
                 try {
-                    application.sourceModel.retrieveHostsSources { completed, total, label ->
-                        NotificationHelper.showUpdateHostsProgressNotification(
+                    application.sourceModel.retrieveHostsSources { completed, total, _ ->
+                        ProgressNotifications.report(
                             application,
-                            completed,
-                            total,
-                            label
+                            ProgressNotifications.Kind.UPDATE_HOSTS,
+                            ProgressReporter.percentOf(completed, total),
+                            application.getString(
+                                R.string.notification_update_host_progress_source,
+                                (completed + 1).coerceAtMost(total),
+                                total
+                            ),
+                            false
                         )
                     }
                     application.adBlockModel.apply()
                 } finally {
-                    NotificationHelper.clearUpdateHostsProgressNotification(application)
+                    ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
                 }
             } else {
                 NotificationHelper.showUpdateHostsNotification(application)

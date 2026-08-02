@@ -4,6 +4,7 @@ import android.app.Application;
 
 import org.adaway.helper.NotificationHelper;
 import org.adaway.helper.PreferenceHelper;
+import org.adaway.helper.ProgressNotifications;
 import org.adaway.model.adblocking.AdBlockMethod;
 import org.adaway.model.adblocking.AdBlockModel;
 import org.adaway.model.source.SourceModel;
@@ -37,6 +38,9 @@ public class AdAwayApplication extends Application {
         ApplicationLog.init(this);
         // Create notification channels
         NotificationHelper.createNotificationChannels(this);
+        // Clears progress notifications left by a previous process and follows the
+        // application state so they are only shown while it is not visible.
+        ProgressNotifications.init(this);
         // Create models
         this.sourceModel = new SourceModel(this);
         this.updateModel = new UpdateModel(this);

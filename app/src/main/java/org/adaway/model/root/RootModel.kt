@@ -22,6 +22,7 @@ import org.adaway.model.error.HostError.NOT_ENOUGH_SPACE
 import org.adaway.model.error.HostError.PRIVATE_FILE_FAILED
 import org.adaway.model.error.HostError.REVERT_FAIL
 import org.adaway.helper.NotificationHelper
+import org.adaway.helper.ProgressNotifications
 import org.adaway.model.error.HostErrorException
 import org.adaway.model.root.MountType.READ_ONLY
 import org.adaway.model.root.MountType.READ_WRITE
@@ -154,7 +155,7 @@ class RootModel(context: Context) : AdBlockModel(context) {
         }
         deleteNewHostsFile()
         // Only the regeneration is worth reporting: reusing the file is immediate.
-        NotificationHelper.showApplyConfigurationProgressNotification(this.context, 0)
+        ProgressNotifications.report(this.context, ProgressNotifications.Kind.APPLY_CONFIGURATION, 0)
         try {
             BufferedWriter(OutputStreamWriter(this.context.openFileOutput(HOSTS_FILENAME, MODE_PRIVATE))).use { writer ->
                 writeHostsHeader(writer, fingerprint)
@@ -164,7 +165,7 @@ class RootModel(context: Context) : AdBlockModel(context) {
         } catch (exception: IOException) {
             throw HostErrorException(PRIVATE_FILE_FAILED, exception)
         } finally {
-            NotificationHelper.clearApplyConfigurationNotification(this.context)
+            ProgressNotifications.done(this.context, ProgressNotifications.Kind.APPLY_CONFIGURATION)
         }
     }
 
@@ -248,7 +249,9 @@ class RootModel(context: Context) : AdBlockModel(context) {
         // Read the entries in pages: materialising millions of them at once was a large
         // allocation spike for no benefit, since each one is written and then discarded.
         val progress = ProgressReporter(this.hostEntryDao.count) { percent ->
-            NotificationHelper.showApplyConfigurationProgressNotification(this.context, percent)
+            ProgressNotifications.report(
+                this.context, ProgressNotifications.Kind.APPLY_CONFIGURATION, percent
+            )
         }
         HostEntryPager.forEachEntry(
             fetch = { afterHost, limit -> this.hostEntryDao.getEntriesAfter(afterHost, limit) },

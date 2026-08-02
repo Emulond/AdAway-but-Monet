@@ -20,7 +20,8 @@ import org.adaway.AdAwayApplication
 import org.adaway.db.AppDatabase
 import org.adaway.db.dao.HostListItemDao
 import org.adaway.db.dao.HostsSourceDao
-import org.adaway.helper.NotificationHelper
+import org.adaway.R
+import org.adaway.helper.ProgressNotifications
 import org.adaway.helper.PreferenceHelper
 import org.adaway.model.adblocking.AdBlockMethod
 import org.adaway.model.adblocking.AdBlockModel
@@ -28,6 +29,7 @@ import org.adaway.model.error.HostError
 import org.adaway.model.error.HostErrorException
 import org.adaway.db.entity.HostsSource
 import org.adaway.model.source.SourceModel
+import org.adaway.model.root.ProgressReporter
 import org.adaway.model.source.SourceUpdateStatus
 import org.adaway.model.update.Manifest
 import org.adaway.model.update.UpdateModel
@@ -173,22 +175,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             val application = getApplication<Application>()
-            var retrieving = false
             try {
                 _pending.value = true
+                // Reported from the tap, so leaving the application straight away still shows it.
+                ProgressNotifications.report(application, ProgressNotifications.Kind.UPDATE_HOSTS, null)
                 withContext(Dispatchers.IO) {
                     if (!sourceModel.checkForUpdate()) {
                         return@withContext
                     }
-                    retrieving = true
-                    NotificationHelper.showUpdateHostsProgressNotification(application)
-                    sourceModel.retrieveHostsSources { completed, total, label ->
-                        NotificationHelper.showUpdateHostsProgressNotification(
-                            application,
-                            completed,
-                            total,
-                            label
-                        )
+                    sourceModel.retrieveHostsSources { completed, total, _ ->
+                        reportSourceProgress(application, completed, total)
                     }
                     adBlockModel.apply()
                 }
@@ -196,9 +192,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 Timber.w(exception, "Failed to update.")
                 _error.emit(exception.error)
             } finally {
-                if (retrieving) {
-                    NotificationHelper.clearUpdateHostsProgressNotification(application)
-                }
+                ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
                 _pending.value = false
             }
         }
@@ -215,15 +209,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val application = getApplication<Application>()
             try {
                 _pending.value = true
-                NotificationHelper.showUpdateHostsProgressNotification(application)
+                ProgressNotifications.report(application, ProgressNotifications.Kind.UPDATE_HOSTS, null)
                 withContext(Dispatchers.IO) {
-                    sourceModel.retrieveHostsSources { completed, total, label ->
-                        NotificationHelper.showUpdateHostsProgressNotification(
-                            application,
-                            completed,
-                            total,
-                            label
-                        )
+                    sourceModel.retrieveHostsSources { completed, total, _ ->
+                        reportSourceProgress(application, completed, total)
                     }
                     adBlockModel.apply()
                 }
@@ -231,10 +220,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 Timber.w(exception, "Failed to sync.")
                 _error.emit(exception.error)
             } finally {
-                NotificationHelper.clearUpdateHostsProgressNotification(application)
+                ProgressNotifications.done(application, ProgressNotifications.Kind.UPDATE_HOSTS)
                 _pending.value = false
             }
         }
+    }
+
+    private fun reportSourceProgress(application: Application, completed: Int, total: Int) {
+        ProgressNotifications.report(
+            application,
+            ProgressNotifications.Kind.UPDATE_HOSTS,
+            ProgressReporter.percentOf(completed, total),
+            application.getString(
+                R.string.notification_update_host_progress_source,
+                (completed + 1).coerceAtMost(total),
+                total
+            )
+        )
     }
 
     fun enableAllSources() {

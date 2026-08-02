@@ -119,6 +119,7 @@ dependencies {
     debugImplementation libs.androidx.compose.ui.test.manifest
 
     implementation libs.androidx.lifecycle.livedata.ktx
+    implementation libs.androidx.lifecycle.process
     implementation libs.androidx.lifecycle.viewmodel.ktx
     implementation libs.androidx.paging.compose
     implementation libs.androidx.paging.runtime

@@ -177,34 +177,19 @@ object NotificationHelper {
         notificationManager.notify(UPDATE_HOSTS_NOTIFICATION_ID, builder.build())
     }
 
-    @JvmStatic
-    fun showUpdateHostsProgressNotification(context: Context) {
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
-        if (notificationManager == null || !notificationManager.areNotificationsEnabled()) {
-            return
-        }
-
-        val builder = buildUpdateProgressNotification(
-            context = context,
-            notificationManager = notificationManager,
-            title = context.getString(R.string.notification_update_host_progress_title),
-            text = context.getString(R.string.notification_update_host_progress_text),
-            progress = null,
-            route = AdAwayRoute.HOSTS
-        )
-
-        notificationManager.notify(UPDATE_HOSTS_PROGRESS_NOTIFICATION_ID, builder.build())
-    }
-
     /**
-     * Update the hosts progress notification with the source currently being retrieved.
+     * Show the progress of a hosts sources update.
      *
-     * @param completed The number of sources already retrieved.
-     * @param total The total number of sources to retrieve.
-     * @param label The label of the source being retrieved.
+     * @param percent The completion, or {@code null} when it is not known yet.
+     * @param text The text describing what is happening, or {@code null} for the default one.
      */
     @JvmStatic
-    fun showUpdateHostsProgressNotification(context: Context, completed: Int, total: Int, label: String) {
+    @JvmOverloads
+    fun showUpdateHostsProgressNotification(
+        context: Context,
+        percent: Int? = null,
+        text: String? = null
+    ) {
         val notificationManager = context.getSystemService(NotificationManager::class.java)
         if (notificationManager == null || !notificationManager.areNotificationsEnabled()) {
             return
@@ -214,13 +199,8 @@ object NotificationHelper {
             context = context,
             notificationManager = notificationManager,
             title = context.getString(R.string.notification_update_host_progress_title),
-            text = context.getString(
-                R.string.notification_update_host_progress_source,
-                (completed + 1).coerceAtMost(total),
-                total,
-                label
-            ),
-            progress = if (total > 0) completed * 100 / total else null,
+            text = text ?: context.getString(R.string.notification_update_host_progress_text),
+            progress = percent?.coerceIn(0, 100),
             route = AdAwayRoute.HOSTS
         )
 
