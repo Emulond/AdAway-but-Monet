@@ -68,6 +68,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -644,6 +646,42 @@ private fun HomeHeader(
     }
 }
 
+/**
+ * A single line of text that shrinks until it fits its width.
+ *
+ * The counters can reach seven digits on large host lists. Wrapping them onto a second line makes
+ * the cards jump in height and reads poorly, so the text size is reduced instead, down to a floor
+ * below which it would be unreadable.
+ */
+@Composable
+private fun ShrinkToFitText(
+    text: String,
+    style: TextStyle,
+    fontWeight: FontWeight,
+    modifier: Modifier = Modifier
+) {
+    val startFontSize = style.fontSize.takeIf { it.isSpecified } ?: 24.sp
+    var fontSize by remember(text, startFontSize) { mutableStateOf(startFontSize) }
+    Text(
+        text = text,
+        style = style,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        maxLines = 1,
+        softWrap = false,
+        textAlign = TextAlign.Center,
+        modifier = modifier,
+        onTextLayout = { result ->
+            // Step down until it fits, or until shrinking further would stop being legible.
+            if (result.didOverflowWidth && fontSize > MIN_METRIC_FONT_SIZE) {
+                fontSize = (fontSize * 0.9f).coerceAtLeast(MIN_METRIC_FONT_SIZE)
+            }
+        }
+    )
+}
+
+private val MIN_METRIC_FONT_SIZE = 11.sp
+
 @Composable
 private fun HomeMetricCard(
     modifier: Modifier = Modifier,
@@ -681,7 +719,7 @@ private fun HomeMetricCard(
                 },
                 label = "countTransition"
             ) { targetCount ->
-                Text(
+                ShrinkToFitText(
                     text = targetCount.toString(),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.ExtraBold,
