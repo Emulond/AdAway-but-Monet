@@ -71,9 +71,10 @@ import org.adaway.ui.compose.ExpressiveTopBar
 import org.adaway.ui.compose.safeCombinedClickable
 import org.adaway.util.Clipboard
 import org.adaway.util.RegexUtils
+import java.text.SimpleDateFormat
 import java.time.Instant
-import java.time.ZoneId
 import java.util.Date
+import java.util.Locale
 
 private fun onLogEntryAction(
     context: android.content.Context,
@@ -557,24 +558,25 @@ private fun LogEntryRow(
 }
 
 /**
- * Format the time a request was last seen the way the system does, showing the date only when it
- * was not made today.
+ * Format the date and time a request was last seen, to the second.
+ *
+ * The fields are ordered and punctuated the way the system does it for the current language, and
+ * the clock follows the twelve or twenty four hour setting. The date is always shown: a recording
+ * kept across days is otherwise ambiguous, and the plain time formats leave the seconds out.
  */
 @Composable
 private fun rememberFormattedTime(instant: Instant): String {
     val context = LocalContext.current
-    val timeFormat = remember(context) { DateFormat.getTimeFormat(context) }
-    val dateFormat = remember(context) { DateFormat.getDateFormat(context) }
-    return remember(instant, timeFormat, dateFormat) {
-        val zone = ZoneId.systemDefault()
-        val date = Date.from(instant)
-        val time = timeFormat.format(date)
-        if (instant.atZone(zone).toLocalDate() == Instant.now().atZone(zone).toLocalDate()) {
-            time
-        } else {
-            dateFormat.format(date) + " " + time
-        }
+    val formatter = remember(context) {
+        val locale = context.resources.configuration.locales[0] ?: Locale.getDefault()
+        val datePattern = DateFormat.getBestDateTimePattern(locale, "yyyyMMdd")
+        val timePattern = DateFormat.getBestDateTimePattern(
+            locale,
+            if (DateFormat.is24HourFormat(context)) "HHmmss" else "hmmss"
+        )
+        SimpleDateFormat("$datePattern, $timePattern", locale)
     }
+    return remember(instant, formatter) { formatter.format(Date.from(instant)) }
 }
 
 @Composable
