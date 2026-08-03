@@ -48,6 +48,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,15 +77,19 @@ class TcpdumpUtils {
      * The capture arguments, most wanted first. Kept in one place because the running capture is
      * recognised by them.
      *
+     * The capture is deliberately not verbose. Asked to be, it prints the packet header and the
+     * packet content on two separate lines, leaving the requested host name on a line of its own
+     * with no time on it. Without it, each request is one line carrying both.
+     *
      * The first set asks for a dated timestamp on every line, so each request can be shown with
      * the time it was made. The second leaves the capture to timestamp lines its own way, and the
      * third drops timestamps altogether; they are only used if a capture program does not
      * understand what comes before, so an unusual one still records the host names.
      */
     private static final String[] CAPTURE_ARGUMENT_VARIANTS = {
-            "-i any -p -l -v -tttt -s 512 'udp dst port 53'",
-            "-i any -p -l -v -s 512 'udp dst port 53'",
-            "-i any -p -l -v -t -s 512 'udp dst port 53'"
+            "-i any -p -l -tttt -s 512 'udp dst port 53'",
+            "-i any -p -l -s 512 'udp dst port 53'",
+            "-i any -p -l -t -s 512 'udp dst port 53'"
     };
     /**
      * Recognises a running capture whichever program is running it.
@@ -401,19 +406,37 @@ class TcpdumpUtils {
         if (!Files.exists(logPath)) {
             return emptyList();
         }
-        // Keyed by host so a host requested many times is reported once, in the order it first
-        // appeared, carrying the time of its last request.
-        Map<String, Instant> lastSeenByHost = new LinkedHashMap<>();
         try (Stream<String> lines = Files.lines(logPath)) {
-            lines.forEach(line -> {
-                String host = getTcpdumpHostname(line);
-                if (host != null) {
-                    lastSeenByHost.put(host, getTcpdumpTime(line));
-                }
-            });
+            return parseRequests(lines);
         } catch (IOException | UncheckedIOException exception) {
             Timber.e(exception, "Failed to read the DNS request log.");
             return emptyList();
+        }
+    }
+
+    /**
+     * Read the requests out of capture output.
+     *
+     * @param lines The lines written by the capture.
+     * @return One request per host, in the order the host first appeared, carrying the time of its
+     * last request.
+     */
+    static List<DnsRequest> parseRequests(Stream<String> lines) {
+        Map<String, Instant> lastSeenByHost = new LinkedHashMap<>();
+        // A request belongs to the last time read, not necessarily to the line naming it: asked to
+        // be verbose, a capture puts the packet header, which carries the time, on the line before
+        // the one carrying the host name.
+        Instant time = null;
+        for (Iterator<String> iterator = lines.iterator(); iterator.hasNext(); ) {
+            String line = iterator.next();
+            Instant lineTime = getTcpdumpTime(line);
+            if (lineTime != null) {
+                time = lineTime;
+            }
+            String host = getTcpdumpHostname(line);
+            if (host != null) {
+                lastSeenByHost.put(host, time);
+            }
         }
         return lastSeenByHost.entrySet().stream()
                 .map(entry -> new DnsRequest(entry.getKey(), entry.getValue()))
