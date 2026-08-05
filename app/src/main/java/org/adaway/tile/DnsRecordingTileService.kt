@@ -50,10 +50,9 @@ class DnsRecordingTileService : TileService() {
                 return
             }
             model.setRecordingLogs(!model.isRecordingLogs)
-            // Report the state the capture actually ended in rather than the requested one.
-            val recording = model.isRecordingLogs
-            PreferenceHelper.setLastKnownDnsRecording(this, recording)
-            updateTile(recording)
+            // Report the state the capture actually ended in rather than the requested one. The
+            // model is what remembers it, so the tile reads it back rather than writing its own.
+            updateTile(model.isRecordingLogs)
         } catch (exception: RuntimeException) {
             Timber.w(exception, "Failed to toggle DNS recording.")
         } finally {

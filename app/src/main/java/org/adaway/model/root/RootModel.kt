@@ -80,7 +80,7 @@ class RootModel(context: Context) : AdBlockModel(context) {
         copyNewHostsFile()
         setState(R.string.status_check_copy)
         setState(R.string.status_hosts_updated)
-        this.applied.postValue(true)
+        setApplied(true)
     }
 
     @Throws(HostErrorException::class)
@@ -89,7 +89,7 @@ class RootModel(context: Context) : AdBlockModel(context) {
         try {
             revertHostFile()
             setState(R.string.status_revert_done)
-            this.applied.postValue(false)
+            setApplied(false)
         } catch (exception: IOException) {
             throw HostErrorException(REVERT_FAIL, exception)
         }
@@ -122,12 +122,25 @@ class RootModel(context: Context) : AdBlockModel(context) {
                 NotificationHelper.clearDnsRecordingNotification(this.context)
                 NotificationHelper.showDnsRecordingFailureNotification(this.context, failure)
             }
+            rememberRecordingState(failure == null)
         } else {
             this.recordingFailure = null
             this.recordingWarning = null
             TcpdumpUtils.stopTcpdump()
             NotificationHelper.clearDnsRecordingNotification(this.context)
+            rememberRecordingState(false)
         }
+    }
+
+    /**
+     * Remember whether the capture is running, for whoever cannot afford to ask.
+     *
+     * The quick settings tile is drawn every time the panel is expanded, far too often to run a
+     * privileged shell command for it, so it shows what was remembered here. Recording it in the
+     * model rather than in the tile keeps it true however the recording was turned on or off.
+     */
+    private fun rememberRecordingState(recording: Boolean) {
+        PreferenceHelper.setLastKnownDnsRecording(this.context, recording)
     }
 
     override fun getRequests(): List<DnsRequest> = TcpdumpUtils.getRequests(this.context)
@@ -144,7 +157,7 @@ class RootModel(context: Context) : AdBlockModel(context) {
         } else {
             isApplied = ShellUtils.mergeAllLines(result.out).startsWith(HEADER1)
         }
-        this.applied.postValue(isApplied)
+        setApplied(isApplied)
     }
 
     private fun syncPreferences(context: Context) {
