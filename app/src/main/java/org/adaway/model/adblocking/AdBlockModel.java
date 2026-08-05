@@ -6,6 +6,7 @@ import androidx.annotation.StringRes;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
+import org.adaway.helper.PreferenceHelper;
 import org.adaway.model.error.HostErrorException;
 import org.adaway.model.root.RootModel;
 import org.adaway.model.vpn.VpnModel;
@@ -73,6 +74,21 @@ public abstract class AdBlockModel {
      * @return The ad block method of this model.
      */
     public abstract AdBlockMethod getMethod();
+
+    /**
+     * Record whether the configuration is applied.
+     *
+     * Remembering it as well as publishing it lets the quick settings tile draw itself without
+     * building a model and opening a privileged shell, which it cannot afford to do every time the
+     * panel is expanded. Going through here keeps what it draws true however the ad blocking was
+     * turned on or off.
+     *
+     * @param applied {@code true} if applied, {@code false} if reverted.
+     */
+    protected void setApplied(boolean applied) {
+        this.applied.postValue(applied);
+        PreferenceHelper.setLastKnownAdBlocked(this.context, applied);
+    }
 
     /**
      * Checks if hosts list is applied.

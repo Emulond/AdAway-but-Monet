@@ -58,7 +58,7 @@ public class VpnModel extends AdBlockModel {
         this.logs = new LinkedHashMap<>();
         this.recordingLogs = false;
         this.requestCount = 0;
-        this.applied.postValue(VpnServiceControls.isRunning(context));
+        setApplied(VpnServiceControls.isRunning(context));
     }
 
     @Override
@@ -72,7 +72,7 @@ public class VpnModel extends AdBlockModel {
         this.blockCache.evictAll();
         // Start VPN
         boolean started = VpnServiceControls.start(this.context);
-        this.applied.postValue(started);
+        setApplied(started);
         if (!started) {
             throw new HostErrorException(ENABLE_VPN_FAIL);
         }
@@ -82,7 +82,7 @@ public class VpnModel extends AdBlockModel {
     @Override
     public void revert() {
         VpnServiceControls.stop(this.context);
-        this.applied.postValue(false);
+        setApplied(false);
     }
 
     @Override
